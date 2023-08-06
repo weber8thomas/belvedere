@@ -14,7 +14,8 @@ with open("config.yaml", "r") as stream:
         print(exc)
         metadata = {}
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+# app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+dash.register_page("belvedere", path="/belvedere")
 
 # Define the categories for grouping the parameters
 categories = ["General", "Normalization", "Genecore", "ArbiGent", "Other"]
@@ -42,7 +43,8 @@ def generate_form_element(meta, id):
                 html.Small(meta['desc'], className="text-muted")
             ], className="mb-2")
 
-app.layout = html.Div([
+
+layout = html.Div([
     dbc.Container([
         dbc.Row([
             dbc.Col([
@@ -63,7 +65,7 @@ app.layout = html.Div([
 
 
 
-@app.callback(
+@dash.callback(
     Output("run-button", "disabled"),
     [
         Input(id, "value")
@@ -76,7 +78,7 @@ def validate_inputs(*values):
     return False
 
 
-@app.callback(
+@dash.callback(
     Output("run-button", "children"),
     [Input("run-button", "n_clicks")],
     [
@@ -111,5 +113,5 @@ def run_pipeline(n, *values):
     return "Pipeline ran successfully!"
 
 
-if __name__ == "__main__":
-    app.run_server(debug=True)
+# if __name__ == "__main__":
+#     app.run_server(debug=True)
