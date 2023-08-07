@@ -142,3 +142,7 @@ var/
 *.bigWig
 *.bed
 test*
+
+data/
+logs_mosaicatcher/
+assets/

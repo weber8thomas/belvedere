@@ -25,7 +25,7 @@ def get_progress_from_file(file_path):
 def generate_progress_components():
     files = [
         os.path.join(LOGS_DIR, f)
-        for f in os.listdir(LOGS_DIR)
+        for f in sorted(os.listdir(LOGS_DIR))
         if os.path.isfile(os.path.join(LOGS_DIR, f))
     ]
     print(files)
@@ -68,7 +68,7 @@ app.layout = dbc.Container(
 )
 def update_progress(n):
     components = []
-    for log_file in os.listdir(LOGS_DIR):
+    for log_file in sorted(os.listdir(LOGS_DIR)):
         progress = get_progress_from_file(os.path.join(LOGS_DIR, log_file))
         color = "primary"
         animated = True
