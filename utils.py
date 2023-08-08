@@ -5,7 +5,9 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 import re
 import dash_mantine_components as dmc
-
+from dash_iconify import DashIconify
+import requests
+import json
 
 def merge_labels_and_info(labels, info):
     labels_df = pd.read_csv(labels, sep="\t")
@@ -90,7 +92,7 @@ def generate_form_element(selected_run, selected_sample):
                                         placeholder="Enter email",
                                     ),
                                     dbc.FormText(
-                                        "Are you on email? You simply have to be these days",
+                                        "Specify your email address to be updated on the status of the pipeline",
                                         color="secondary",
                                     ),
                                 ],
@@ -142,12 +144,47 @@ def generate_form_element(selected_run, selected_sample):
                                                 "value": "hgsvc_based_normalisation",
                                             },
                                         ],
-                                        # color="blue",
+                                        color="red",
                                         value="multistep_normalisation_for_SV_calling",
                                     ),
                                     html.Br(),
                                     dbc.FormText(
-                                        "Are you on email? You simply have to be these days",
+                                        "Rely on the multistep normalisation or the HGSVC normalisation applied to the counts file to be used for SV calling",
+                                        color="secondary",
+                                    ),
+                                ],
+                                width=10,
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                    html.Hr(),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dbc.Label(
+                                    "Blacklisting",
+                                    html_for={
+                                        "type": f"blacklisting-{selected_run}-{selected_sample}"
+                                    },
+                                ),
+                                width=2,
+                            ),
+                            dbc.Col(
+                                [
+                                    dmc.Switch(
+                                        id={
+                                            "type": f"blacklisting-{selected_run}-{selected_sample}"
+                                        },
+                                        checked=True,
+                                        # color="blue",
+                                        # label="multistep_normalisation_for_SV_calling",
+                                        # thumbIcon=DashIconify(icon="bi:mask"),
+                                        # size="lg",
+                                        color="red",
+                                    ),
+                                    dbc.FormText(
+                                        "Apply blacklisted regions to counts file",
                                         color="secondary",
                                     ),
                                 ],
@@ -176,7 +213,7 @@ def generate_form_element(selected_run, selected_sample):
                         dbc.Row(
                             [
                                 dbc.Label(
-                                    "Arbigent\n",
+                                    "Arbigent",
                                     html_for={
                                         "type": f"arbigent-{selected_run}-{selected_sample}"
                                     },
@@ -184,16 +221,16 @@ def generate_form_element(selected_run, selected_sample):
                                 ),
                                 dbc.Col(
                                     [
-                                        dbc.Switch(
+                                        dmc.Switch(
                                             id={
                                                 "type": f"arbigent-{selected_run}-{selected_sample}"
                                             },
-                                            label="ArbiGent",
-                                            value=False
-                                            # color="blue",
+                                            # label="ArbiGent",
+                                            checked=False,
+                                            color="red",
                                         ),
                                         dbc.FormText(
-                                            "Are you on email? You simply have to be these days",
+                                            "Use ArbiGent (Arbitrary Genotyping) to genotype specific positions",
                                             color="secondary",
                                         ),
                                     ],
@@ -222,7 +259,7 @@ def generate_form_element(selected_run, selected_sample):
                                             # color="blue",
                                         ),
                                         dbc.FormText(
-                                            "Are you on email? You simply have to be these days",
+                                            "ArbiGent BED file location on the cluster",
                                             color="secondary",
                                         ),
                                     ],
@@ -372,9 +409,20 @@ def get_progress_from_file(file_path):
     #     if pattern.match(line):
     # print(log_lines)
     progress = int(re.search(r"\((\d+)%\)", log_lines).group(1))
-    print(progress)
+    # print(progress)
     return progress
 
+def get_progress_from_api(run, sample):
+
+    url = "http://127.0.0.1:8053/api/workflows"
+    response_json = requests.get(url, headers={"Accept": "application/json"}).json()
+    print(response_json)
+    data = [wf for wf in response_json["workflows"] if wf["name"] == f"{run}-{sample}"]
+    data = data[0] if data else {}
+    print(data)
+    if not data:
+        data = {"name" : f"{run}-{sample}", "jobs_total": 0, "jobs_done": 0, "status": "not_started"}
+    return data
 
 def generate_progress_components():
     files = [
