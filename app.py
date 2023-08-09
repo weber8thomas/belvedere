@@ -8,6 +8,7 @@ import dash
 import dash_ag_grid as dag
 from pprint import pprint
 import yaml
+import time
 
 
 import dash_mantine_components as dmc
@@ -30,7 +31,7 @@ app = Dash(
 )
 server = app.server
 
-root_folder = os.path.expanduser("/Users/tweber/Gits/dash-ashleys-reports/data")
+root_folder = os.path.expanduser("/Users/tweber/Gits/belvedere/data")
 
 
 data = get_files_structure(root_folder)
@@ -126,15 +127,72 @@ sidebar = html.Div(
 
 # Enable Belvedere button when Save button is clicked
 @app.callback(
-    Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
-    Input({"type": "save-button", "index": ALL}, "n_clicks"),
+    [
+        Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
+        Output({"type": "stored-save-button", "index": MATCH}, "data"),
+    ],
+    [
+        Input({"type": "save-button", "index": MATCH}, "n_clicks"),
+        Input("run-dropdown", "value"),
+        Input("sample-dropdown", "value"),
+                Input("interval", "n_intervals"),
+
+    ],
+    [
+        State({"type": "selection-checkbox-grid", "index": MATCH}, "selectedRows"),
+        State({"type": "selection-checkbox-grid", "index": MATCH}, "rowData"),
+        State({"type": "stored-save-button", "index": MATCH}, "data"),
+    ],
     prevent_initial_call=True,
 )
-def disable_redirect_button(n_clicks):
-    if n_clicks is None:
-        raise dash.exceptions.PreventUpdate
+def disable_redirect_button(
+    n_clicks,
+    run,
+    sample,
+    selected_rows,
+    df,
+    stored_save_button,
+    n,
+):
+    processed_df_path = (
+        f"{root_folder}/{run}/{sample}/cell_selection/labels_belvedere.tsv"
+    )
+    if os.path.isfile(processed_df_path):
+        return False, stored_save_button
     else:
-        return False
+        if n_clicks:
+            if n_clicks > stored_save_button:
+                print(n_clicks)
+
+
+                # Convert records to DataFrame once
+                processed_df = pd.DataFrame.from_records(df)
+
+                # Backup original 'prediction' and 'probability'
+                for col in ["prediction", "probability"]:
+                    processed_df[f"{col}_bak"] = processed_df[col]
+
+                selected_cells = pd.DataFrame.from_records(selected_rows).cell.values.tolist()
+
+                # Set 'prediction' and 'probability' directly in processed_df based on condition
+                processed_df.loc[
+                    processed_df.cell.isin(selected_cells), ["prediction", "probability"]
+                ] = 1
+                processed_df.loc[
+                    ~processed_df.cell.isin(selected_cells), ["prediction", "probability"]
+                ] = 0
+
+                # Sort and reset index
+                processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
+
+                processed_df.to_csv(processed_df_path, sep="\t", index=False)
+                print(processed_df)
+                return False, n_clicks
+            else:
+                return True, stored_save_button
+        else:
+            return True, stored_save_button
+        
 
 
 # Open the success modal when the Save button is clicked
@@ -286,7 +344,7 @@ def toggle_offcanvas(n, is_open):
         Input("run-dropdown", "value"),
         Input("sample-dropdown", "value"),
     ],
-    prevent_initial_call=True,
+    # prevent_initial_call=True,
 )
 def fill_sample_wise_container(selected_run, selected_sample):
     if selected_run and selected_sample:
@@ -320,7 +378,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                 ),
                 dbc.ModalBody(
                     html.H5(
-                        "Your cell selection was successfully saved!",
+                        f"Your cell selection for {selected_run} - {selected_sample} was successfully saved!",
                         className="text-success",
                     ),
                     style={"background-color": "#F0FFF0"},
@@ -386,6 +444,15 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         "type": "stored-report-button-ashleys",
                         "index": f"{selected_run}-{selected_sample}",
                     },
+                    storage_type="session",
+                    data=0,
+                ),
+                dcc.Store(
+                    {
+                        "type": "stored-save-button",
+                        "index": f"{selected_run}-{selected_sample}",
+                    },
+                    storage_type="session",
                     data=0,
                 ),
                 dcc.Store(
@@ -393,6 +460,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         "type": "stored-homepage-button",
                         "index": f"{selected_run}-{selected_sample}",
                     },
+                    storage_type="session",
                     data=0,
                 ),
                 dcc.Store(
@@ -400,6 +468,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         "type": "stored-report-button-mosaicatcher",
                         "index": f"{selected_run}-{selected_sample}",
                     },
+                    storage_type="session",
                     data=0,
                 ),
                 dcc.Store(
@@ -407,6 +476,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         "type": "stored-run-mosaicatcher-button",
                         "index": f"{selected_run}-{selected_sample}",
                     },
+                    storage_type="session",
                     data=0,
                 ),
                 dcc.Store(
@@ -414,6 +484,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         "type": "stored-progress",
                         "index": f"{selected_run}-{selected_sample}",
                     },
+                    storage_type="session",
                     data={"progress": 0, "children": None},
                 ),
             ]
@@ -433,7 +504,7 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         # gradient={"from": "grape", "to": "pink", "deg": 35},
                         # color="blue",
                         n_clicks=0,
-                        size="xl",
+                        size="lg",
                         leftIcon=DashIconify(icon="mdi:home"),
                     ),
                     dmc.Button(
@@ -446,8 +517,9 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         # variant="gradient",
                         # gradient={"from": "grape", "to": "pink", "deg": 35},
                         color="pink",
-                        size="xl",
+                        size="lg",
                         n_clicks=0,
+                        disabled=True,
                         leftIcon=DashIconify(icon="mdi:eye"),
                     ),
                     dmc.Button(
@@ -460,8 +532,8 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         n_clicks=0,
                         # variant="gradient",
                         color="orange",
-                        # disabled=True,
-                        size="xl",
+                        disabled=True,
+                        size="lg",
                         leftIcon=DashIconify(icon="mdi:hand-tap"),
                     ),
                     dmc.Button(
@@ -475,25 +547,25 @@ def fill_sample_wise_container(selected_run, selected_sample):
                         # gradient={"from": "teal", "to": "lime", "deg": 105},
                         color="red",
                         n_clicks=0,
-                        disabled=False,
-                        size="xl",
+                        disabled=True,
+                        size="lg",
                         leftIcon=DashIconify(icon="ooui:logo-wikimedia-discovery"),
                     ),
-                    # dmc.Button(
-                    #     "Display MosaiCatcher report",
-                    #     id={
-                    #         "type": "report-button-mosaicatcher",
-                    #         "index": f"{selected_run}-{selected_sample}",
-                    #     },
-                    #     radius="xl",
-                    #     n_clicks=0,
-                    #     # variant="gradient",
-                    #     # gradient={"from": "orange", "to": "red"},
-                    #     color="grape",
-                    #     disabled=False,
-                    #     size="xl",
-                    #     leftIcon=DashIconify(icon="mdi:eye"),
-                    # ),
+                    dmc.Button(
+                        "Display MosaiCatcher report",
+                        id={
+                            "type": "report-button-mosaicatcher",
+                            "index": f"{selected_run}-{selected_sample}",
+                        },
+                        radius="xl",
+                        n_clicks=0,
+                        # variant="gradient",
+                        # gradient={"from": "orange", "to": "red"},
+                        color="grape",
+                        disabled=True,
+                        size="lg",
+                        leftIcon=DashIconify(icon="mdi:eye"),
+                    ),
                 ],
             )
         )
@@ -529,7 +601,30 @@ def fill_sample_wise_container(selected_run, selected_sample):
 
 
 @app.callback(
-    Output({"type": "run-progress-container", "index": MATCH}, "children"),
+    [
+        Output({"type": "report-button-ashleys", "index": MATCH}, "disabled"),
+        Output({"type": "open-button", "index": MATCH}, "disabled"),
+        # Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
+    ],
+    [
+        Input({"type": "stored-progress", "index": MATCH}, "data"),
+        Input("run-dropdown", "value"),
+        Input("sample-dropdown", "value"),
+        Input("interval", "n_intervals"),
+    ],
+)
+def disable_report_button(progress_store, run, sample, n):
+    if progress_store["progress"] == 100:
+        return False, False
+    else:
+        return True, True
+
+
+@app.callback(
+    [
+        Output({"type": "run-progress-container", "index": MATCH}, "children"),
+        Output({"type": "stored-progress", "index": MATCH}, "data"),
+    ],
     [
         Input("interval-progress", "n_intervals"),
         Input("run-dropdown", "value"),
@@ -538,14 +633,38 @@ def fill_sample_wise_container(selected_run, selected_sample):
     [
         State({"type": "stored-progress", "index": MATCH}, "data"),
     ],
+    prevent_initial_call=True,
 )
 def update_progress(n, run, sample, progress_store):
+    disabled = True
     print(progress_store)
     if (progress_store["progress"] < 100) or (progress_store["children"] is None):
         print("TOTO")
         index = "TMP"
         components = []
-        panoptes_json = get_progress_from_api(run, sample)
+
+        max_retries = 3  # Maximum number of times to retry the request
+        wait_time = 5  # Time to wait between retries (in seconds)
+
+        for _ in range(max_retries):
+            try:
+                panoptes_json = get_progress_from_api(run, sample)
+                # Break out of the loop if the request is successful
+                break
+            except Exception as e:
+                # If it's the last iteration, raise the exception
+                if _ == max_retries - 1:
+                    print(
+                        f"Failed to fetch progress from API after {max_retries} attempts."
+                    )
+                    return [
+                        html.Div("Error fetching progress. Please try again later."),
+                        progress_store,
+                    ]
+                # If it's not the last iteration, wait for some time and then retry
+                time.sleep(wait_time)
+                continue
+
         print(panoptes_json)
         status = panoptes_json["status"]
 
@@ -560,7 +679,6 @@ def update_progress(n, run, sample, progress_store):
         animated = True
         striped = True
         label = ""
-        disabled = True
 
         # if progress >= 5:
         label = f"{status} - {progress} %"
@@ -589,18 +707,18 @@ def update_progress(n, run, sample, progress_store):
         if progress > 0:
             progress_bar = dbc.Row(
                 [
-                    dbc.Col(
-                        [
-                            dmc.ActionIcon(
-                                DashIconify(icon="mdi:eye"),
-                                variant="outline",
-                                color="blue",
-                                disabled=disabled,
-                                id={"type": "report-button", "index": index},
-                            ),
-                        ],
-                        width="auto",
-                    ),
+                    # dbc.Col(
+                    #     [
+                    #         dmc.ActionIcon(
+                    #             DashIconify(icon="mdi:eye"),
+                    #             variant="outline",
+                    #             color="blue",
+                    #             disabled=disabled,
+                    #             id={"type": "report-button", "index": index},
+                    #         ),
+                    #     ],
+                    #     width="auto",
+                    # ),
                     # dbc.Col(log_file),
                     dbc.Col(
                         dbc.Progress(
@@ -620,9 +738,12 @@ def update_progress(n, run, sample, progress_store):
         else:
             components.append(html.Div("Progress bar not available yet"))
         progress_store["children"] = components
+        progress_store["progress"] = progress
         print(components)
+        print(progress_store)
         return components, progress_store
     else:
+        # progress_store["children"] = [html.Div("Progress bar not available yet")]
         return progress_store["children"], progress_store
 
 
@@ -633,6 +754,7 @@ def update_progress(n, run, sample, progress_store):
         Input("run-dropdown", "value"),
         Input({"type": "homepage-button", "index": MATCH}, "n_clicks"),
     ],
+    prevent_initial_call=True,
 )
 def fill_metadata_container(sample, run, n_clicks):
     index = "PE20"
@@ -671,39 +793,39 @@ def fill_metadata_container(sample, run, n_clicks):
         Output({"type": "run-sample-container", "index": MATCH}, "children"),
         Output({"type": "stored-homepage-button", "index": MATCH}, "data"),
         Output({"type": "stored-report-button-ashleys", "index": MATCH}, "data"),
-        # Output({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
         Output({"type": "stored-run-mosaicatcher-button", "index": MATCH}, "data"),
-        Output({"type": "stored-progress", "index": MATCH}, "data"),
+        Output({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
+        # Output({"type": "stored-progress", "index": MATCH}, "data"),
     ],
     [
         Input({"type": "homepage-button", "index": MATCH}, "n_clicks"),
         Input({"type": "report-button-ashleys", "index": MATCH}, "n_clicks"),
-        # Input({"type": "report-button-mosaicatcher", "index": MATCH}, "n_clicks"),
         Input({"type": "run-mosaicatcher-button", "index": MATCH}, "n_clicks"),
+        Input({"type": "report-button-mosaicatcher", "index": MATCH}, "n_clicks"),
         Input("run-dropdown", "value"),
         Input("sample-dropdown", "value"),
     ],
     [
         State({"type": "stored-homepage-button", "index": MATCH}, "data"),
         State({"type": "stored-report-button-ashleys", "index": MATCH}, "data"),
-        # State({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
         State({"type": "stored-run-mosaicatcher-button", "index": MATCH}, "data"),
-        State({"type": "stored-progress", "index": MATCH}, "data"),
+        State({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
+        # State({"type": "stored-progress", "index": MATCH}, "data"),
     ],
-    prevent_initial_call=True,
+    # prevent_initial_call=True,
 )
 def populate_container_sample(
     n_clicks_homepage_button,
     n_clicks_report_ashleys_button,
-    # n_clicks_report_mosaicatcher_button,
     n_clicks_beldevere_button,
+    n_clicks_report_mosaicatcher_button,
     selected_run,
     selected_sample,
     report_homepage_button_stored,
     report_ashleys_button_stored,
-    # report_mosaicatcher_button_stored,
     beldevere_button_stored,
-    progress_store,
+    report_mosaicatcher_button_stored,
+    # progress_store,
 ):
     print(
         n_clicks_homepage_button,
@@ -715,57 +837,85 @@ def populate_container_sample(
         report_ashleys_button_stored,
         beldevere_button_stored,
     )
+
+    index = "PE20"
+    genecore_filepath = f"/g/korbel/STOCKS/Sequencing/2023/{selected_run}"
+    pipeline_processed_data_filepath = f"/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/{selected_run}/{selected_sample}"
+    backup_processed_data_filepath = (
+        f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
+    )
+
+    metadata_dict = {
+        "Sample name": selected_sample,
+        "Run name": selected_run,
+        "Sequencing index": index,
+        "Raw data location": genecore_filepath,
+        "Pipeline processed data location": pipeline_processed_data_filepath,
+        "Backup processed data location": backup_processed_data_filepath,
+    }
+
+    card = dmc.Card(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(dmc.Text(k, size="lg", weight=500), width=4),
+                    dbc.Col(dmc.Text(v, size="md"), width="auto"),
+                ]
+            )
+            for k, v in metadata_dict.items()
+        ],
+        id={
+            "type": "metadata-container",
+            "index": f"{selected_run}-{selected_sample}",
+        },
+    )
+
+    homepage_layout = html.Div(
+        children=[
+            dmc.Title(
+                f"{selected_sample} metadata",
+                order=2,
+                style={"paddingTop": "20px", "paddingBottom": "20px"},
+            ),
+            card,
+            html.Hr(),
+            dmc.Title(
+                "Ashleys-QC run",
+                order=2,
+                style={"paddingTop": "20px", "paddingBottom": "20px"},
+            ),
+            html.Div(
+                id={
+                    "type": "run-progress-container",
+                    "index": f"{selected_run}-{selected_sample}",
+                },
+            ),
+            html.Hr(),
+            dmc.Title(
+                "MosaiCatcher run",
+                order=2,
+                style={"paddingTop": "20px", "paddingBottom": "20px"},
+            ),
+            # html.Div(
+            #     id={
+            #         "type": "run-progress-container",
+            #         "index": f"mosaicatcher-{selected_run}-{selected_sample}",
+            #     },
+            # ),
+        ]
+    )
+
     if (
         n_clicks_homepage_button
         and n_clicks_homepage_button > report_homepage_button_stored
     ):
-        homepage_layout = html.Div(
-            children=[
-                dmc.Title(
-                    f"{selected_sample} metadata",
-                    order=2,
-                    style={"paddingTop": "20px", "paddingBottom": "20px"},
-                ),
-                html.Div(
-                    id={
-                        "type": "metadata-container",
-                        "index": f"{selected_run}-{selected_sample}",
-                    },
-                ),
-                html.Hr(),
-                dmc.Title(
-                    "Ashleys-QC run",
-                    order=2,
-                    style={"paddingTop": "20px", "paddingBottom": "20px"},
-                ),
-                dbc.Spinner(
-                    html.Div(
-                        id={
-                            "type": "run-progress-container",
-                            "index": f"{selected_run}-{selected_sample}",
-                        },
-                    )
-                ),
-                html.Hr(),
-                dmc.Title(
-                    "MosaiCatcher runs",
-                    order=2,
-                    style={"paddingTop": "20px", "paddingBottom": "20px"},
-                ),
-                # html.Div(
-                #     id={
-                #         "type": "run-progress-container",
-                #         "index": f"mosaicatcher-{selected_run}-{selected_sample}",
-                #     },
-                # ),
-            ]
-        )
         return (
             homepage_layout,
             n_clicks_homepage_button,
             n_clicks_report_ashleys_button,
             n_clicks_beldevere_button,
-            progress_store,
+            n_clicks_report_mosaicatcher_button,
+            # progress_store,
         )
 
     # Check which button was clicked last by comparing their timestamps
@@ -784,9 +934,9 @@ def populate_container_sample(
             ],
             n_clicks_homepage_button,
             n_clicks_report_ashleys_button,
-            # n_clicks_report_mosaicatcher_button,
             n_clicks_beldevere_button,
-            progress_store
+            n_clicks_report_mosaicatcher_button,
+            # progress_store,
         )
     elif (
         n_clicks_beldevere_button
@@ -885,20 +1035,29 @@ def populate_container_sample(
             belvedere_layout,
             n_clicks_homepage_button,
             n_clicks_report_ashleys_button,
-            # n_clicks_report_mosaicatcher_button,
             n_clicks_beldevere_button,
-            progress_store
+            n_clicks_report_mosaicatcher_button,
+            # progress_store,
         )
     else:
         print("TOTO")
+        # return (
+        #     html.Div(dmc.Title("Please select a run and sample", order=2)),
+        #     n_clicks_homepage_button,
+        #     n_clicks_report_ashleys_button,
+        #     # n_clicks_report_mosaicatcher_button,
+        #     n_clicks_beldevere_button,
+        #     # progress_store,
+        # )
         return (
-            html.Div(dmc.Title("Please select a run and sample", order=2)),
+            homepage_layout,
             n_clicks_homepage_button,
             n_clicks_report_ashleys_button,
-            # n_clicks_report_mosaicatcher_button,
             n_clicks_beldevere_button,
-            progress_store
+            n_clicks_report_mosaicatcher_button,
+            # progress_store,
         )
+
     # elif (
     #     n_clicks_report_mosaicatcher_button
     #     and n_clicks_report_mosaicatcher_button > report_mosaicatcher_button_stored
@@ -989,7 +1148,7 @@ def populate_container_sample(
 app.layout = html.Div(
     [
         dcc.Interval(id="interval", interval=1000, n_intervals=0),
-        dcc.Interval(id="interval-progress", interval=5000, n_intervals=0),
+        dcc.Interval(id="interval-progress", interval=2000, n_intervals=0),
         dcc.Location(id="url", refresh=False),
         # navbar,
         sidebar,
