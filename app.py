@@ -24,10 +24,13 @@ from utils import categories, category_metadata, generate_form_element
 # PROGRESS
 from utils import LOGS_DIR, get_progress_from_file, get_progress_from_api
 
+
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
     suppress_callback_exceptions=True,
+    # title="Strand-Scape",
+    update_title=None
 )
 server = app.server
 
@@ -107,33 +110,43 @@ sidebar = html.Div(
 )
 
 
-# @app.callback(
-#     [
-#         Output("url", "pathname"),
-#         Output("warning-modal", "is_open"),
-#         Output("modal-header", "children"),
-#         Output("modal-body", "children"),
-#     ],
-#     [Input("run-dropdown", "value"), Input("sample-dropdown", "value"), Input('run-mosaicatcher-button', 'n_clicks')],
-#     [State("url", "pathname")],
-# )
-# def on_button_click(run, sample, redirect_clicks, pathname):
-#     print(run, sample)
-#     hand_labels_path = f"data/{run}/{sample}/cell_selection/labels_hand.tsv"
-#     check_hand_labels_exist = os.path.isfile(hand_labels_path)
-#     if redirect_clicks == 0:  # button has not been clicked yet
-#         return pathname, False, dash.no_update, dash.no_update
+@app.callback(
+    [
+        # Output("url", "pathname"),
+        Output("warning-modal", "is_open"),
+        Output("modal-header", "children"),
+        Output("modal-body", "children"),
+    ],
+    [
+        # Input("run-dropdown", "value"),
+        # Input("sample-dropdown", "value"),
+        Input("run-mosaicatcher-button", "n_clicks"),
+    ],
+    [State("url", "pathname")],
+)
+def on_button_click(redirect_clicks, url):
+    run, sample = url.split("/")[1:3]
+    print(run, sample)
+    hand_labels_path = f"data/{run}/{sample}/cell_selection/labels_hand.tsv"
+    check_hand_labels_exist = os.path.isfile(hand_labels_path)
+    if redirect_clicks == 0:  # button has not been clicked yet
+        return False, dash.no_update, dash.no_update
 
-#     else:
-#         if check_hand_labels_exist is False:  # Save button was not clicked
-#             header = html.H1("Warning!", className="text-warning")
-#             body = html.H5(
-#                 "The 'Save' button was not clicked for the current run & sample. Please save before proceeding.",
-#                 className="text-warning",
-#             )
-#             return pathname, True, header, body  # show modal
-#         else:
-#             return '/belvedere', False, dash.no_update, dash.no_update  # go to /belvedere
+    else:
+        if check_hand_labels_exist is False:  # Save button was not clicked
+            header = html.H1("Warning!", className="text-warning")
+            body = html.H5(
+                "The 'Save' button was not clicked for the current run & sample. Please save before proceeding.",
+                className="text-warning",
+            )
+            return True, header, body  # show modal
+        else:
+            return (
+                # "/belvedere",
+                False,
+                dash.no_update,
+                dash.no_update,
+            )  # go to /belvedere
 
 
 # Enable Belvedere button when Save button is clicked
@@ -156,7 +169,7 @@ sidebar = html.Div(
         State({"type": "stored-save-button", "index": MATCH}, "data"),
         State({"type": "stored-selectedRows", "index": MATCH}, "data"),
     ],
-    prevent_initial_call=True,
+    # prevent_initial_call=True,
 )
 def disable_redirect_button(
     n_clicks,
@@ -171,7 +184,7 @@ def disable_redirect_button(
 ):
     if url != "/":
         run, sample = url.split("/")[1:3]
-        print(run, sample)
+        # print(run, sample)
         processed_df_path = (
             f"{root_folder}/{run}/{sample}/cell_selection/labels_belvedere.tsv"
         )
@@ -179,7 +192,7 @@ def disable_redirect_button(
         #     return False, stored_save_button, stored_selected_rows
         # else:
 
-        print(stored_save_button)
+        # print(stored_save_button)
         if n_clicks:
             print(n_clicks, stored_save_button["n_clicks"])
             if n_clicks > stored_save_button["n_clicks"]:
@@ -330,7 +343,7 @@ main_content = html.Div(
     prevent_initial_call=True,
 )
 def set_run_value(options):
-    if options is None:
+    if not options:
         raise dash.exceptions.PreventUpdate
     return options[0]["value"] if options else None
 
@@ -342,7 +355,7 @@ def set_run_value(options):
     prevent_initial_call=True,
 )
 def set_sample_options(selected_run):
-    if selected_run is None:
+    if not selected_run:
         raise dash.exceptions.PreventUpdate
     sample_names = data[selected_run]
     return [
@@ -535,14 +548,6 @@ def fill_sample_wise_container(url):
                         storage_type="session",
                         data={"n_clicks": 0, "disabled": True},
                     ),
-                    dcc.Store(
-                        id={
-                            "type": "stored-progress",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        data={"progress": 0, "children": None},
-                    ),
                 ]
             )
 
@@ -666,7 +671,7 @@ def fill_sample_wise_container(url):
         # Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
     ],
     [
-        Input({"type": "stored-progress", "index": MATCH}, "data"),
+        Input("stored-progress", "data"),
         # Input("run-dropdown", "value"),
         # Input("sample-dropdown", "value"),
         Input("url", "pathname"),
@@ -674,25 +679,42 @@ def fill_sample_wise_container(url):
     ],
 )
 def disable_report_button(progress_store, url, n):
-    if progress_store["progress"] == 100:
-        return False, False
+    if url != "/":
+        run, sample = url.split("/")[1:3]
+        print(run, sample)
+        if progress_store[f"{run}--{sample}"]["status"] == "Done":
+            return False, False
+        else:
+            return True, True
+        # if progress_store["progress"] == 100:
+        #     return False, False
+        # else:
+        #     return True, True
     else:
-        return True, True
+        raise dash.exceptions.PreventUpdate
+
+
+import random
+
+
+# @app.callback(Output("url", "href"), [Input("refresh-button", "n_clicks")])
+# def refresh_page(n_clicks):
+#     if n_clicks:
+#         # Trigger JavaScript function to refresh the page
+#         return html.Script(
+#             """
+#             refreshPage();
+#         """
+#         )
+#     return dash.no_update
 
 
 @app.callback(
     [
         Output("landing-page", "children"),
-        # Output({"type": "stored-progress", "index": MATCH}, "data"),
     ],
     [
-        # Input("url", "pathname"),
         Input("interval-progress", "n_intervals"),
-        # Input("run-dropdown", "value"),
-        # Input("sample-dropdown", "value"),
-    ],
-    [
-        # State({"type": "stored-progress", "index": MATCH}, "data"),
     ],
     # prevent_initial_call=True,
 )
@@ -720,7 +742,25 @@ def update_progress(n):
                         ),
                         width="auto",
                     ),
-                ]
+                    dbc.Col(
+                        dcc.Link(
+                            dmc.ActionIcon(
+                                DashIconify(icon="mdi:refresh", width=50),
+                                id="refresh-button",
+                                # "Running progress dashboard",
+                                # order=1,
+                                # style={
+                                #     "paddingBottom": "20px",
+                                #     "paddingTop": "20px",
+                                # },
+                            ),
+                            href="/",
+                            style={"color": "black", "text-decoration": "none"},
+                        ),
+                        width="auto",
+                        style={"float": "right"},
+                    ),
+                ],
             ),
         ]
     )
@@ -754,10 +794,8 @@ def update_progress(n):
                     placeholder="Select a sample",
                     persistence=True,
                     persistence_type="session",
-                    # radius="xl",
                     searchable=True,
                     clearable=True,
-                    # size="md",
                 ),
             ],
             width=3,
@@ -784,7 +822,6 @@ def update_progress(n):
         )
         for e in headers
     ]
-    
 
     components = [
         html.Div(
@@ -800,321 +837,270 @@ def update_progress(n):
     return components
 
 
-@app.callback(
-    Output("progress-container-landing-page", "children"),
-    [
-        Input("interval-progress", "n_intervals"),
-        Input("run-dropdown", "value"),
-        Input("sample-dropdown", "value"),
-    ],
-)
-def update_progress(n, dropdown_run, dropdown_sample):
-    print(dropdown_run, dropdown_sample)
-    import time
-    import requests
-    from requests.exceptions import Timeout
+def generate_progress_bar(entry):
+    status = entry["status"]
+    if status != "not_started":
+        progress = round((entry["jobs_done"] / entry["jobs_total"]) * 100, 2)
+    else:
+        progress = 0
 
-    url_api = "http://127.0.0.1:8058/api/workflows"
+    color = "primary"
+    animated = True
+    striped = True
+    label = ""
 
-    max_retries = 3  # Maximum number of times to retry the request
-    wait_time = 5  # Time to wait between retries (in seconds)
+    label = f"{status} - {progress} %"
 
-    for _ in range(max_retries):
-        print(_)
-        try:
-            response_json = requests.get(
-                url_api, headers={"Accept": "application/json"}
-            ).json()
-            print(response_json)
-            # Break out of the loop if the request is successful
-            break
-        except Timeout:
-            print(
-                f"Timeout error: Attempt {_ + 1} of {max_retries}. Retrying in {wait_time} seconds."
-            )
-            if _ == max_retries - 1:
-                print(
-                    f"Failed to fetch progress from API after {max_retries} attempts."
-                )
-                return [
-                    html.Div("Error fetching progress. Please try again later."),
-                    # progress_store,
-                ]
-            time.sleep(wait_time)
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return [
-                html.Div("An unexpected error occurred. Please try again later."),
-                # progress_store,
-            ]
-
-    # Extract data
-
-    data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
-    # response_json = requests.get(url, headers={"Accept": "application/json"}).json()
-    data_panoptes = [wf for wf in response_json["workflows"] if wf["name"] in data_lite]
-    print(data_panoptes)
-    for run_sample in data_lite:
-        if run_sample not in [wf["name"] for wf in data_panoptes]:
-            data_panoptes.append(
-                {
-                    "name": run_sample,
-                    "jobs_total": 0,
-                    "jobs_done": 0,
-                    "status": "not_started",
-                }
-            )
-
-    if dropdown_run:
-        data_panoptes = [e for e in data_panoptes if e["name"].split("--")[0] in dropdown_run]
-    if dropdown_sample:
-        data_panoptes = [e for e in data_panoptes if e["name"].split("--")[1] in dropdown_sample]
-
-    print(data_lite)
-    # print(headers_components)
-    # print(components)
-    components = []
-
-    # Generate progress bars
-    for entry in data_panoptes:
-        print(entry)
-        status = entry["status"]
-        if status != "not_started":
-            progress = round((entry["jobs_done"] / entry["jobs_total"]) * 100, 2)
-        else:
-            progress = 0
-
+    if progress == 100 and status == "Done":
+        color = "success"
+        animated = False
+        striped = False
+        disabled = False
+    elif progress < 100 and status == "Error":
+        color = "danger"
+        animated = False
+        striped = False
+    elif progress < 100 and status == "Running":
         color = "primary"
         animated = True
         striped = True
-        label = ""
+    elif progress == 0 and status == "not_started":
+        color = "grey"
+        animated = False
+        striped = False
+        # print("TOTO")
+        label = "Not Started"
 
-        # if progress >= 5:
-        label = f"{status} - {progress} %"
+    # run, sample = entry["name"].split("--")
 
-        if progress == 100 and status == "Done":
-            color = "success"
-            animated = False
-            striped = False
-            disabled = False
-        elif progress < 100 and status == "Error":
-            color = "danger"
-            animated = False
-            striped = False
-        elif progress < 100 and status == "Running":
-            color = "primary"
-            animated = True
-            striped = True
-        elif progress == 0 and status == "not_started":
-            color = "grey"
-            animated = False
-            striped = False
-            print("TOTO")
-            label = "Not Started"
+    progress_bar = dbc.Progress(
+        value=progress,
+        animated=animated,
+        striped=striped,
+        color=color,
+        label=label,
+        style={"height": "30px"},
+    )
 
-        run, sample = entry["name"].split("--")
-
-        progress_bar = dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        dmc.Text(
-                            run,
-                            size="lg",
-                            weight=400,
-                            # style={"paddingBottom": "20px", "paddingTop": "20px"},
-                        ),
-                    ],
-                    width=3,
-                ),
-                dbc.Col(
-                    [
-                        dcc.Link(
-                            [
-                                dmc.Text(
-                                    sample,
-                                    size="lg",
-                                    weight=400,
-                                    # style={"paddingBottom": "20px", "paddingTop": "20px"},
-                                )
-                            ],
-                            href=f"/{run}/{sample}",
-                            style={"color": "black", "text-decoration": "none"},
-                        ),
-                    ],
-                    width=3,
-                ),
-                dbc.Col(
-                    dbc.Progress(
-                        value=progress,
-                        animated=animated,
-                        striped=striped,
-                        color=color,
-                        label=label,
-                        style={"height": "30px"},
-                    ),
-                    width=3,
-                ),
-                dbc.Col(
-                    dbc.Progress(
-                        value=progress,
-                        animated=animated,
-                        striped=striped,
-                        color=color,
-                        label=label,
-                        style={"height": "30px"},
-                    ),
-                    width=3,
-                ),
-            ],
-            style={"height": "40px"},
-        )
-        components.append(progress_bar)
-
-    # Store components and progress (if needed)
-    # progress_store["children"] = components
-    print(components)
-
-    # Initialize components
-    print(dropdown_run, dropdown_sample)
-    # if run and sample:
-    return components
-    # else:
-    #     return []
+    return progress_bar
 
 
 @app.callback(
-    [
-        Output({"type": "run-progress-container", "index": MATCH}, "children"),
-        Output({"type": "stored-progress", "index": MATCH}, "data"),
-    ],
-    [
-        Input("interval-progress", "n_intervals"),
-        # Input("run-dropdown", "value"),
-        # Input("sample-dropdown", "value"),
-        Input("url", "pathname"),
-    ],
-    [
-        State({"type": "stored-progress", "index": MATCH}, "data"),
-    ],
-    prevent_initial_call=True,
+    Output("progress-container-landing-page", "children"),
+    Input("stored-progress", "data"),
+    Input("url", "pathname"),
+    Input("run-dropdown", "value"),
+    Input("sample-dropdown", "value"),
 )
-def update_progress(n, url, progress_store):
+def update_progress(data_panoptes, url, selected_run, selected_sample):
+    if url != "/":
+        return dash.no_update
+    else:
+        components = []
+
+        # Generate progress bars
+        for entry in data_panoptes:
+            run, sample = entry.split("--")
+            process = True
+            if selected_run:
+                if run not in selected_run:
+                    process = False
+            if selected_sample:
+                if sample not in selected_sample:
+                    process = False
+            print(selected_run, selected_sample)
+            print(entry)
+            print(process)
+            if process:
+                print("\n\n\n")
+                print(entry)
+                print("\n\n\n")
+
+                progress_bar = generate_progress_bar(data_panoptes[entry])
+
+                row = dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                dmc.Text(
+                                    run,
+                                    size="lg",
+                                    weight=400,
+                                ),
+                            ],
+                            width=3,
+                        ),
+                        dbc.Col(
+                            [
+                                dcc.Link(
+                                    [
+                                        dmc.Text(
+                                            sample,
+                                            size="lg",
+                                            weight=400,
+                                        )
+                                    ],
+                                    href=f"/{run}/{sample}",
+                                    style={"color": "black", "text-decoration": "none"},
+                                ),
+                            ],
+                            width=3,
+                        ),
+                        dbc.Col(
+                            progress_bar,
+                            width=3,
+                        ),
+                        dbc.Col(
+                            progress_bar,
+                            width=3,
+                        ),
+                    ],
+                    style={"height": "40px"},
+                )
+
+                # progress_bar = generate_progress_bar(data_panoptes[entry])
+                components.append(row)
+        return components
+
+
+
+
+
+import requests
+
+@app.callback(
+    Output("stored-progress", "data"),
+    Input("interval-progress", "n_intervals"),
+    State("stored-progress", "data"),
+)
+def update_progress(n, progress_store):
+    # Fetch processed data from FastAPI service
+    response = requests.get("http://127.0.0.1:8059/get-progress")
+    response_json = response.json()
+    # if not response_json:
+    #     # return dash.no_update
+    #     raise dash.exceptions.PreventUpdate
+    
+
+    print("\n\n")
+#     # Extract data
+    data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
+    data_panoptes = [wf for wf in response_json["workflows"] if wf["name"] in data_lite]
+    print(data_panoptes)
+    data_panoptes = {wf["name"]: wf for wf in data_panoptes}
+    print(data_panoptes)
+
+    for run_sample in data_lite:
+        if run_sample not in data_panoptes:
+            data_panoptes[run_sample] = {
+                "name": run_sample,
+                "jobs_total": 0,
+                "jobs_done": 0,
+                "status": "not_started",
+            }
+    print(data_panoptes)
+
+    print(progress_store == data_panoptes)
+    if progress_store == data_panoptes:
+        print("NO UPDATE")
+        return dash.no_update
+    progress_store = data_panoptes
+    print(progress_store)
+    return data_panoptes
+    
+    # print(data_panoptes)
+
+    # if progress_store == data_panoptes:
+    #     print("NO UPDATE")
+    #     return dash.no_update
+    
+    # return data_panoptes
+
+
+# @app.callback(
+#     Output("stored-progress", "data"),
+#     Input("interval-progress", "n_intervals"),
+#     State("stored-progress", "data"),
+# )
+# def update_progress(n, progress_store):
+#     # Fetch data from API
+#     import time
+#     import requests
+#     from requests.exceptions import Timeout
+
+#     url_api = "http://127.0.0.1:8058/api/workflows"
+
+#     max_retries = 5  # Maximum number of times to retry the request
+#     wait_time = 10  # Time to wait between retries (in seconds)
+
+#     for _ in range(max_retries):
+#         print(_)
+#         try:
+#             response_json = requests.get(
+#                 url_api, headers={"Accept": "application/json"}
+#             ).json()
+#             print(response_json)
+#             # Break out of the loop if the request is successful
+#             break
+#         except Timeout:
+#             print(
+#                 f"Timeout error: Attempt {_ + 1} of {max_retries}. Retrying in {wait_time} seconds."
+#             )
+#             if _ == max_retries - 1:
+#                 print(
+#                     f"Failed to fetch progress from API after {max_retries} attempts."
+#                 )
+#             time.sleep(wait_time)
+#         except Exception as e:
+#             print(f"An unexpected error occurred: {e}")
+#             response_json = {"workflows": []}
+
+#     # Extract data
+#     data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
+#     data_panoptes = [wf for wf in response_json["workflows"] if wf["name"] in data_lite]
+#     print(data_panoptes)
+#     data_panoptes = {wf["name"]: wf for wf in data_panoptes}
+#     print(data_panoptes)
+
+#     for run_sample in data_lite:
+#         if run_sample not in data_panoptes:
+#             data_panoptes[run_sample] = {
+#                 "name": run_sample,
+#                 "jobs_total": 0,
+#                 "jobs_done": 0,
+#                 "status": "not_started",
+#             }
+#     print(data_panoptes)
+
+#     print(progress_store == data_panoptes)
+#     if progress_store == data_panoptes:
+#         print("NO UPDATE")
+#         return dash.no_update
+#     progress_store = data_panoptes
+#     print(progress_store)
+
+#     return progress_store
+
+
+@app.callback(
+    Output({"type": "run-progress-container", "index": MATCH}, "children"),
+    Input("url", "pathname"),
+    Input("interval-progress", "n_intervals"),
+    State("stored-progress", "data"),
+    # prevent_initial_call=True,
+)
+def update_progress(url, n, progress_store):
     if url == "/":
-        return html.Div(), progress_store
+        return dash.no_update
     else:
         run, sample = url.split("/")[1:3]
+        progress_bar = generate_progress_bar(progress_store[f"{run}--{sample}"])
         disabled = True
         print(run, sample)
         print(progress_store)
-        return html.Div(), progress_store
-    # if (progress_store["progress"] < 100) or (progress_store["children"] is None):
-    #     print("TOTO")
-    #     index = "TMP"
-    #     components = []
-
-    #     max_retries = 3  # Maximum number of times to retry the request
-    #     wait_time = 5  # Time to wait between retries (in seconds)
-
-    #     for _ in range(max_retries):
-    #         try:
-    #             panoptes_json = get_progress_from_api(run, sample)
-    #             # Break out of the loop if the request is successful
-    #             break
-    #         except Exception as e:
-    #             # If it's the last iteration, raise the exception
-    #             if _ == max_retries - 1:
-    #                 print(
-    #                     f"Failed to fetch progress from API after {max_retries} attempts."
-    #                 )
-    #                 return [
-    #                     html.Div("Error fetching progress. Please try again later."),
-    #                     progress_store,
-    #                 ]
-    #             # If it's not the last iteration, wait for some time and then retry
-    #             time.sleep(wait_time)
-    #             continue
-
-    #     # print(panoptes_json)
-    #     status = panoptes_json["status"]
-
-    #     if status != "not_started":
-    #         progress = round(
-    #             (panoptes_json["jobs_done"] / panoptes_json["jobs_total"]) * 100, 2
-    #         )
-    #     else:
-    #         progress = 0
-
-    #     color = "primary"
-    #     animated = True
-    #     striped = True
-    #     label = ""
-
-    #     # if progress >= 5:
-    #     label = f"{status} - {progress} %"
-
-    #     if progress == 100 and status == "Done":
-    #         color = "success"
-    #         animated = False
-    #         striped = False
-    #         disabled = False
-    #     elif progress < 100 and status == "Error":
-    #         color = "danger"
-    #         animated = False
-    #         striped = False
-    #     elif progress < 100 and status == "Running":
-    #         color = "primary"
-    #         animated = True
-    #         striped = True
-    #     elif progress == 0 and status == "not_started":
-    #         color = "grey"
-    #         animated = False
-    #         striped = False
-    #         print("TOTO")
-    #         label = "Not Started"
-
-    #     print(label)
-    #     if progress > 0:
-    #         progress_bar = dbc.Row(
-    #             [
-    #                 # dbc.Col(
-    #                 #     [
-    #                 #         dmc.ActionIcon(
-    #                 #             DashIconify(icon="mdi:eye"),
-    #                 #             variant="outline",
-    #                 #             color="blue",
-    #                 #             disabled=disabled,
-    #                 #             id={"type": "report-button", "index": index},
-    #                 #         ),
-    #                 #     ],
-    #                 #     width="auto",
-    #                 # ),
-    #                 # dbc.Col(log_file),
-    #                 dbc.Col(
-    #                     dbc.Progress(
-    #                         value=progress,
-    #                         animated=animated,
-    #                         striped=striped,
-    #                         color=color,
-    #                         label=label,
-    #                         style={"height": "30px"},
-    #                     )
-    #                 ),
-    #             ],
-    #             style={"height": "40px"},
-    #         )
-    #         components.append(progress_bar)
-
-    #     else:
-    #         components.append(html.Div("Progress bar not available yet"))
-    #     progress_store["children"] = components
-    #     progress_store["progress"] = progress
-    #     # print(components)
-    #     # print(progress_store)
-    #     return components, progress_store
-    # else:
-    #     # progress_store["children"] = [html.Div("Progress bar not available yet")]
-    #     return progress_store["children"], progress_store
+        print(progress_bar)
+        print("TARATATA")
+        return progress_bar
 
 
 @app.callback(
@@ -1186,6 +1172,7 @@ def fill_metadata_container(url, n_clicks):
         State({"type": "stored-report-button-ashleys", "index": MATCH}, "data"),
         State({"type": "stored-run-mosaicatcher-button", "index": MATCH}, "data"),
         State({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
+        State({"type": "stored-selectedRows", "index": MATCH}, "data"),
         # State({"type": "stored-progress", "index": MATCH}, "data"),
     ],
     # prevent_initial_call=True,
@@ -1203,6 +1190,7 @@ def populate_container_sample(
     beldevere_button_stored,
     report_mosaicatcher_button_stored,
     # progress_store,
+    selected_rows,
 ):
     if url == "/":
         raise dash.exceptions.PreventUpdate
@@ -1324,7 +1312,7 @@ def populate_container_sample(
             and n_clicks_beldevere_button > beldevere_button_stored
         ):
             form_element = generate_form_element(selected_run, selected_sample)
-            x = 52
+            x = len(selected_rows)
             color_x = "green" if x > 50 else "red"
             belvedere_layout = html.Div(
                 [
@@ -1385,6 +1373,7 @@ def populate_container_sample(
                                                     id="run-button",
                                                     color="red",
                                                     variant="filled",
+                                                    disabled=False,
                                                     # gradient={
                                                     #     "from": "teal",
                                                     #     "to": "lime",
@@ -1421,7 +1410,7 @@ def populate_container_sample(
                 # progress_store,
             )
         else:
-            print("TOTO")
+            # print("TOTO")
             # return (
             #     html.Div(dmc.Title("Please select a run and sample", order=2)),
             #     n_clicks_homepage_button,
@@ -1525,12 +1514,22 @@ def populate_container_sample(
 
 # content = html.Div(id="page-content")
 
+general_backend_components = html.Div(
+    [
+        dcc.Store(
+            id="stored-progress",
+            storage_type="memory",
+            # data={},
+        ),
+        dcc.Interval(id="interval", interval=1000, n_intervals=0),
+        dcc.Interval(id="interval-progress", interval=20000, n_intervals=0),
+        dcc.Location(id="url", refresh=False),
+    ]
+)
 
 app.layout = html.Div(
     [
-        dcc.Interval(id="interval", interval=1000, n_intervals=0),
-        dcc.Interval(id="interval-progress", interval=5000, n_intervals=0),
-        dcc.Location(id="url", refresh=False),
+        general_backend_components,
         # navbar,
         sidebar,
         main_content,
