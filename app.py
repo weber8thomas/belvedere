@@ -30,7 +30,7 @@ app = Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
     suppress_callback_exceptions=True,
     # title="Strand-Scape",
-    update_title=None
+    update_title=None,
 )
 server = app.server
 
@@ -155,98 +155,119 @@ def on_button_click(redirect_clicks, url):
         Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
         Output({"type": "stored-save-button", "index": MATCH}, "data"),
         Output({"type": "stored-selectedRows", "index": MATCH}, "data"),
+        Output({"type": "stored-refresh-button-samplewise", "index": MATCH}, "data"),
     ],
     [
         Input({"type": "save-button", "index": MATCH}, "n_clicks"),
+        Input({"type": "refresh-button-samplewise", "index": MATCH}, "n_clicks"),
         # Input("run-dropdown", "value"),
         # Input("sample-dropdown", "value"),
         Input("url", "pathname"),
-        Input("interval", "n_intervals"),
+        # Input("interval", "n_intervals"),
     ],
     [
         State({"type": "selection-checkbox-grid", "index": MATCH}, "selectedRows"),
         State({"type": "selection-checkbox-grid", "index": MATCH}, "rowData"),
         State({"type": "stored-save-button", "index": MATCH}, "data"),
         State({"type": "stored-selectedRows", "index": MATCH}, "data"),
+        State({"type": "stored-refresh-button-samplewise", "index": MATCH}, "data"),
     ],
     # prevent_initial_call=True,
 )
 def disable_redirect_button(
     n_clicks,
+    n_clicks_refresh,
     # run,
     # sample,
     url,
-    n_intervals,
+    # n_intervals,
     selected_rows,
     df,
     stored_save_button,
     stored_selected_rows,
+    stored_refresh_button_samplewise,
 ):
     if url != "/":
-        run, sample = url.split("/")[1:3]
-        # print(run, sample)
-        processed_df_path = (
-            f"{root_folder}/{run}/{sample}/cell_selection/labels_belvedere.tsv"
-        )
-        # if os.path.isfile(processed_df_path):
-        #     return False, stored_save_button, stored_selected_rows
-        # else:
+        print(n_clicks_refresh, stored_refresh_button_samplewise)
+        if n_clicks_refresh == 0:
+            continue_update = True
+        else:
+            if n_clicks_refresh > stored_refresh_button_samplewise:
+                continue_update = True
+            else:
+                continue_update = False
+        print(continue_update)
+        if not continue_update:
+            raise dash.exceptions.PreventUpdate
+        else:
+            
+            run, sample = url.split("/")[1:3]
+            # print(run, sample)
+            processed_df_path = (
+                f"{root_folder}/{run}/{sample}/cell_selection/labels_belvedere.tsv"
+            )
+            # if os.path.isfile(processed_df_path):
+            #     return False, stored_save_button, stored_selected_rows
+            # else:
 
-        # print(stored_save_button)
-        if n_clicks:
-            print(n_clicks, stored_save_button["n_clicks"])
-            if n_clicks > stored_save_button["n_clicks"]:
-                print("TATA")
-                # print(n_clicks)
+            # print(stored_save_button)
+            if n_clicks:
+                print(n_clicks, stored_save_button["n_clicks"])
+                if n_clicks > stored_save_button["n_clicks"]:
+                    print("TATA")
+                    # print(n_clicks)
 
-                # Convert records to DataFrame once
-                processed_df = pd.DataFrame.from_records(df)
+                    # Convert records to DataFrame once
+                    processed_df = pd.DataFrame.from_records(df)
 
-                # Backup original 'prediction' and 'probability'
-                for col in ["prediction", "probability"]:
-                    processed_df[f"{col}_bak"] = processed_df[col]
+                    # Backup original 'prediction' and 'probability'
+                    for col in ["prediction", "probability"]:
+                        processed_df[f"{col}_bak"] = processed_df[col]
 
-                selected_cells = pd.DataFrame.from_records(
-                    selected_rows
-                ).cell.values.tolist()
+                    selected_cells = pd.DataFrame.from_records(
+                        selected_rows
+                    ).cell.values.tolist()
 
-                # Set 'prediction' and 'probability' directly in processed_df based on condition
-                processed_df.loc[
-                    processed_df.cell.isin(selected_cells),
-                    ["prediction", "probability"],
-                ] = 1
-                processed_df.loc[
-                    ~processed_df.cell.isin(selected_cells),
-                    ["prediction", "probability"],
-                ] = 0
+                    # Set 'prediction' and 'probability' directly in processed_df based on condition
+                    processed_df.loc[
+                        processed_df.cell.isin(selected_cells),
+                        ["prediction", "probability"],
+                    ] = 1
+                    processed_df.loc[
+                        ~processed_df.cell.isin(selected_cells),
+                        ["prediction", "probability"],
+                    ] = 0
 
-                # Sort and reset index
-                processed_df = processed_df.sort_values(by="cell").reset_index(
-                    drop=True
-                )
+                    # Sort and reset index
+                    processed_df = processed_df.sort_values(by="cell").reset_index(
+                        drop=True
+                    )
 
-                processed_df.to_csv(processed_df_path, sep="\t", index=False)
-                # print(processed_df)
-                stored_save_button["run_mosaicatcher_disabled"] = False
-                return (
-                    stored_save_button["run_mosaicatcher_disabled"],
-                    stored_save_button,
-                    selected_rows,
-                )
+                    processed_df.to_csv(processed_df_path, sep="\t", index=False)
+                    # print(processed_df)
+                    stored_save_button["run_mosaicatcher_disabled"] = False
+                    return (
+                        stored_save_button["run_mosaicatcher_disabled"],
+                        stored_save_button,
+                        selected_rows,
+                        n_clicks_refresh,
+                    )
+                else:
+                    return (
+                        stored_save_button["run_mosaicatcher_disabled"],
+                        stored_save_button,
+                        stored_selected_rows,
+                        n_clicks_refresh
+                    )
             else:
                 return (
                     stored_save_button["run_mosaicatcher_disabled"],
                     stored_save_button,
                     stored_selected_rows,
+                    n_clicks_refresh
                 )
-        else:
-            return (
-                stored_save_button["run_mosaicatcher_disabled"],
-                stored_save_button,
-                stored_selected_rows,
-            )
-    else:
-        raise dash.exceptions.PreventUpdate
+        # else:
+        #     raise dash.exceptions.PreventUpdate
 
 
 # Open the success modal when the Save button is clicked
@@ -499,6 +520,14 @@ def fill_sample_wise_container(url):
             stored_components_buttons = html.Div(
                 [
                     dcc.Store(
+                        id={
+                            "type": "stored-refresh-button-samplewise",
+                            "index": f"{selected_run}--{selected_sample}",
+                        },
+                        data=0,
+                        storage_type="session",
+                    ),
+                    dcc.Store(
                         {
                             "type": "stored-report-button-ashleys",
                             "index": f"{selected_run}--{selected_sample}",
@@ -644,6 +673,18 @@ def fill_sample_wise_container(url):
                                         "paddingTop": "20px",
                                     },
                                 ),
+                                dcc.Link(
+                                    dmc.ActionIcon(
+                                        DashIconify(icon="mdi:refresh", width=50),
+                                        id={
+                                            "type": "refresh-button-samplewise",
+                                            "index": f"{selected_run}--{selected_sample}",
+                                        },
+                                        n_clicks=0,
+                                    ),
+                                    href=f"/{selected_run}/{selected_sample}",
+                                    style={"color": "black", "text-decoration": "none"},
+                                ),
                             ],
                         ),
                     ),
@@ -675,10 +716,10 @@ def fill_sample_wise_container(url):
         # Input("run-dropdown", "value"),
         # Input("sample-dropdown", "value"),
         Input("url", "pathname"),
-        Input("interval", "n_intervals"),
+        # Input("interval", "n_intervals"),
     ],
 )
-def disable_report_button(progress_store, url, n):
+def disable_report_button(progress_store, url):
     if url != "/":
         run, sample = url.split("/")[1:3]
         print(run, sample)
@@ -714,11 +755,12 @@ import random
         Output("landing-page", "children"),
     ],
     [
-        Input("interval-progress", "n_intervals"),
+        # Input("interval-progress", "n_intervals"),
+        Input("url", "pathname"),
     ],
     # prevent_initial_call=True,
 )
-def update_progress(n):
+def update_progress(url):
     header_landing_page = dmc.Center(
         [
             dbc.Row(
@@ -742,11 +784,17 @@ def update_progress(n):
                         ),
                         width="auto",
                     ),
+                    dcc.Store(
+                        id="stored-refresh-button",
+                        data=0,
+                        storage_type="session",
+                    ),
                     dbc.Col(
                         dcc.Link(
                             dmc.ActionIcon(
                                 DashIconify(icon="mdi:refresh", width=50),
                                 id="refresh-button",
+                                n_clicks=0,
                                 # "Running progress dashboard",
                                 # order=1,
                                 # style={
@@ -887,103 +935,125 @@ def generate_progress_bar(entry):
 
 @app.callback(
     Output("progress-container-landing-page", "children"),
+    Output("stored-refresh-button", "data"),
     Input("stored-progress", "data"),
     Input("url", "pathname"),
     Input("run-dropdown", "value"),
     Input("sample-dropdown", "value"),
+    Input("refresh-button", "n_clicks"),
+    State("stored-refresh-button", "data"),
 )
-def update_progress(data_panoptes, url, selected_run, selected_sample):
+def update_progress(
+    data_panoptes, url, selected_run, selected_sample, n_clicks, stored_n_clicks
+):
     if url != "/":
         return dash.no_update
     else:
-        components = []
+        if n_clicks is None:
+            raise dash.exceptions.PreventUpdate
+        else:
+            if n_clicks == 0:
+                continue_update = True
+            else:
+                if n_clicks == stored_n_clicks:
+                    continue_update = False
+                else:
+                    continue_update = True
+            if continue_update is False:
+                raise dash.exceptions.PreventUpdate
 
-        # Generate progress bars
-        for entry in data_panoptes:
-            run, sample = entry.split("--")
-            process = True
-            if selected_run:
-                if run not in selected_run:
-                    process = False
-            if selected_sample:
-                if sample not in selected_sample:
-                    process = False
-            print(selected_run, selected_sample)
-            print(entry)
-            print(process)
-            if process:
-                print("\n\n\n")
-                print(entry)
-                print("\n\n\n")
+            else:
+                print("CONTINUE UPDATE")
+                print(n_clicks, stored_n_clicks)
+                components = []
 
-                progress_bar = generate_progress_bar(data_panoptes[entry])
+                # Generate progress bars
+                for entry in data_panoptes:
+                    run, sample = entry.split("--")
+                    process = True
+                    if selected_run:
+                        if run not in selected_run:
+                            process = False
+                    if selected_sample:
+                        if sample not in selected_sample:
+                            process = False
+                    print(selected_run, selected_sample)
+                    print(entry)
+                    print(process)
+                    if process:
+                        print("\n\n\n")
+                        print(entry)
+                        print("\n\n\n")
 
-                row = dbc.Row(
-                    [
-                        dbc.Col(
+                        progress_bar = generate_progress_bar(data_panoptes[entry])
+
+                        row = dbc.Row(
                             [
-                                dmc.Text(
-                                    run,
-                                    size="lg",
-                                    weight=400,
-                                ),
-                            ],
-                            width=3,
-                        ),
-                        dbc.Col(
-                            [
-                                dcc.Link(
+                                dbc.Col(
                                     [
                                         dmc.Text(
-                                            sample,
+                                            run,
                                             size="lg",
                                             weight=400,
-                                        )
+                                        ),
                                     ],
-                                    href=f"/{run}/{sample}",
-                                    style={"color": "black", "text-decoration": "none"},
+                                    width=3,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dcc.Link(
+                                            [
+                                                dmc.Text(
+                                                    sample,
+                                                    size="lg",
+                                                    weight=400,
+                                                )
+                                            ],
+                                            href=f"/{run}/{sample}",
+                                            style={
+                                                "color": "black",
+                                                "text-decoration": "none",
+                                            },
+                                        ),
+                                    ],
+                                    width=3,
+                                ),
+                                dbc.Col(
+                                    progress_bar,
+                                    width=3,
+                                ),
+                                dbc.Col(
+                                    progress_bar,
+                                    width=3,
                                 ),
                             ],
-                            width=3,
-                        ),
-                        dbc.Col(
-                            progress_bar,
-                            width=3,
-                        ),
-                        dbc.Col(
-                            progress_bar,
-                            width=3,
-                        ),
-                    ],
-                    style={"height": "40px"},
-                )
+                            style={"height": "40px"},
+                        )
 
-                # progress_bar = generate_progress_bar(data_panoptes[entry])
-                components.append(row)
-        return components
-
-
-
+                        # progress_bar = generate_progress_bar(data_panoptes[entry])
+                        components.append(row)
+                return components, n_clicks
 
 
 import requests
 
+
 @app.callback(
     Output("stored-progress", "data"),
-    Input("interval-progress", "n_intervals"),
+    # Input("interval-progress", "n_intervals"),
+    Input("url", "pathname"),
     State("stored-progress", "data"),
 )
-def update_progress(n, progress_store):
+def update_progress(url, progress_store):
     # Fetch processed data from FastAPI service
     response = requests.get("http://127.0.0.1:8059/get-progress")
     response_json = response.json()
     # if not response_json:
     #     # return dash.no_update
     #     raise dash.exceptions.PreventUpdate
-    
 
     print("\n\n")
-#     # Extract data
+    #     # Extract data
     data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
     data_panoptes = [wf for wf in response_json["workflows"] if wf["name"] in data_lite]
     print(data_panoptes)
@@ -1007,13 +1077,13 @@ def update_progress(n, progress_store):
     progress_store = data_panoptes
     print(progress_store)
     return data_panoptes
-    
+
     # print(data_panoptes)
 
     # if progress_store == data_panoptes:
     #     print("NO UPDATE")
     #     return dash.no_update
-    
+
     # return data_panoptes
 
 
@@ -1085,11 +1155,11 @@ def update_progress(n, progress_store):
 @app.callback(
     Output({"type": "run-progress-container", "index": MATCH}, "children"),
     Input("url", "pathname"),
-    Input("interval-progress", "n_intervals"),
+    # Input("interval-progress", "n_intervals"),
     State("stored-progress", "data"),
     # prevent_initial_call=True,
 )
-def update_progress(url, n, progress_store):
+def update_progress(url, progress_store):
     if url == "/":
         return dash.no_update
     else:
@@ -1521,8 +1591,8 @@ general_backend_components = html.Div(
             storage_type="memory",
             # data={},
         ),
-        dcc.Interval(id="interval", interval=1000, n_intervals=0),
-        dcc.Interval(id="interval-progress", interval=20000, n_intervals=0),
+        # dcc.Interval(id="interval", interval=1000, n_intervals=0),
+        # dcc.Interval(id="interval-progress", interval=20000, n_intervals=0),
         dcc.Location(id="url", refresh=False),
     ]
 )
