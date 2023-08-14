@@ -1,6 +1,8 @@
+import datetime
+import json
 from dash_iconify import DashIconify
 import subprocess
-from dash import Dash, html, dcc, Input, Output, State, ALL, MATCH
+from dash import Dash, html, dcc, Input, Output, State, ALL, MATCH, ALLSMALLER
 import os
 import pandas as pd
 import dash_bootstrap_components as dbc
@@ -66,7 +68,7 @@ sidebar = html.Div(
                 ]
             )
         ),
-        html.Hr(),
+        # html.Hr(),
         # html.H5("Year selection:"),
         # dcc.Dropdown(
         #     id="year-dropdown",
@@ -83,6 +85,7 @@ sidebar = html.Div(
         # html.H5("Sample selection:"),
         # dcc.Dropdown(id="sample-dropdown", placeholder="Select a sample"),
         html.Hr(),
+        html.Div(id="timestamp-progress"),
         dbc.Modal(
             [
                 dbc.ModalHeader(
@@ -200,7 +203,6 @@ def disable_redirect_button(
         if not continue_update:
             raise dash.exceptions.PreventUpdate
         else:
-            
             run, sample = url.split("/")[1:3]
             # print(run, sample)
             processed_df_path = (
@@ -257,15 +259,17 @@ def disable_redirect_button(
                         stored_save_button["run_mosaicatcher_disabled"],
                         stored_save_button,
                         stored_selected_rows,
-                        n_clicks_refresh
+                        n_clicks_refresh,
                     )
             else:
                 return (
                     stored_save_button["run_mosaicatcher_disabled"],
                     stored_save_button,
                     stored_selected_rows,
-                    n_clicks_refresh
+                    n_clicks_refresh,
                 )
+    else:
+        raise dash.exceptions.PreventUpdate
         # else:
         #     raise dash.exceptions.PreventUpdate
 
@@ -517,6 +521,27 @@ def fill_sample_wise_container(url):
                 placement="end",
             )
 
+            belvedere_json_path = (
+                f"data/{selected_run}/{selected_sample}/config/belvedere.json"
+            )
+            if os.path.isfile(belvedere_json_path):
+                sample_json = json.load(open(belvedere_json_path))
+            else:
+                sample_json = {
+                    "stored-report-button-ashleys": 0,
+                    "stored-save-button": {
+                        "n_clicks": 0,
+                        "run_mosaicatcher_disabled": True,
+                    },
+                    "stored-selectedRows": df.loc[
+                        (df["prediction"] == 1) & (df["pass1"] == 1)
+                    ].to_dict("records"),
+                    "stored-homepage-button": 0,
+                    "stored-report-button-mosaicatcher": 0,
+                    "stored-run-mosaicatcher-button": {"n_clicks": 0, "disabled": True},
+                }
+            print(sample_json)
+
             stored_components_buttons = html.Div(
                 [
                     dcc.Store(
@@ -525,7 +550,17 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         data=0,
-                        storage_type="session",
+                        # data=sample_json["stored-refresh-button-samplewise"],
+                        storage_type="memory",
+                    ),
+                    dcc.Store(
+                        id={
+                            "type": "invisible-output",
+                            "index": f"{selected_run}--{selected_sample}",
+                        },
+                        data=0,
+                        # data=sample_json["stored-refresh-button-samplewise"],
+                        storage_type="memory",
                     ),
                     dcc.Store(
                         {
@@ -533,7 +568,8 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data=0,
+                        # data=0,
+                        data=sample_json["stored-report-button-ashleys"],
                     ),
                     dcc.Store(
                         {
@@ -541,7 +577,8 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
+                        # data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
+                        data=sample_json["stored-save-button"],
                     ),
                     dcc.Store(
                         {
@@ -549,9 +586,10 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data=df.loc[
-                            (df["prediction"] == 1) & (df["pass1"] == 1)
-                        ].to_dict("records"),
+                        # data=df.loc[
+                        #     (df["prediction"] == 1) & (df["pass1"] == 1)
+                        # ].to_dict("records"),
+                        data=sample_json["stored-selectedRows"],
                     ),
                     dcc.Store(
                         {
@@ -559,7 +597,8 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data=0,
+                        # data=0,
+                        data=sample_json["stored-homepage-button"],
                     ),
                     dcc.Store(
                         {
@@ -567,7 +606,8 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data=0,
+                        # data=0,
+                        data=sample_json["stored-report-button-mosaicatcher"],
                     ),
                     dcc.Store(
                         {
@@ -575,7 +615,8 @@ def fill_sample_wise_container(url):
                             "index": f"{selected_run}--{selected_sample}",
                         },
                         storage_type="session",
-                        data={"n_clicks": 0, "disabled": True},
+                        # data={"n_clicks": 0, "disabled": True},
+                        data=sample_json["stored-run-mosaicatcher-button"],
                     ),
                 ]
             )
@@ -787,7 +828,7 @@ def update_progress(url):
                     dcc.Store(
                         id="stored-refresh-button",
                         data=0,
-                        storage_type="session",
+                        storage_type="memory",
                     ),
                     dbc.Col(
                         dcc.Link(
@@ -946,23 +987,24 @@ def generate_progress_bar(entry):
 def update_progress(
     data_panoptes, url, selected_run, selected_sample, n_clicks, stored_n_clicks
 ):
+    print("UPDATE PROGRESS")
+    print(n_clicks, stored_n_clicks)
+    continue_update = False
     if url != "/":
-        return dash.no_update
+        raise dash.exceptions.PreventUpdate
+        # return dash.no_update
     else:
+        print("UPDATE PROGRESS")
+        print(n_clicks, stored_n_clicks)
         if n_clicks is None:
             raise dash.exceptions.PreventUpdate
         else:
-            if n_clicks == 0:
+            if n_clicks == 0 and stored_n_clicks == 0:
                 continue_update = True
             else:
-                if n_clicks == stored_n_clicks:
-                    continue_update = False
-                else:
+                if n_clicks > stored_n_clicks:
                     continue_update = True
-            if continue_update is False:
-                raise dash.exceptions.PreventUpdate
-
-            else:
+            if continue_update is True:
                 print("CONTINUE UPDATE")
                 print(n_clicks, stored_n_clicks)
                 components = []
@@ -977,13 +1019,13 @@ def update_progress(
                     if selected_sample:
                         if sample not in selected_sample:
                             process = False
-                    print(selected_run, selected_sample)
-                    print(entry)
-                    print(process)
+                    # print(selected_run, selected_sample)
+                    # print(entry)
+                    # print(process)
                     if process:
-                        print("\n\n\n")
-                        print(entry)
-                        print("\n\n\n")
+                        # print("\n\n\n")
+                        # print(entry)
+                        # print("\n\n\n")
 
                         progress_bar = generate_progress_bar(data_panoptes[entry])
 
@@ -1040,14 +1082,22 @@ import requests
 
 @app.callback(
     Output("stored-progress", "data"),
-    # Input("interval-progress", "n_intervals"),
+    Output("timestamp-progress", "children"),
+    Input("interval", "n_intervals"),
     Input("url", "pathname"),
+    # Input("refresh-button", "n_clicks"),
     State("stored-progress", "data"),
 )
-def update_progress(url, progress_store):
+def update_progress(n, url, progress_store):
     # Fetch processed data from FastAPI service
     response = requests.get("http://127.0.0.1:8059/get-progress")
-    response_json = response.json()
+
+    response_json_complete = response.json()
+    response_json = response_json_complete[0]
+    timestamp = response_json_complete[1]
+
+    print(response_json)
+    print(timestamp)
     # if not response_json:
     #     # return dash.no_update
     #     raise dash.exceptions.PreventUpdate
@@ -1076,7 +1126,8 @@ def update_progress(url, progress_store):
         return dash.no_update
     progress_store = data_panoptes
     print(progress_store)
-    return data_panoptes
+    timestamp = f"Last update: {timestamp}"
+    return data_panoptes, timestamp
 
     # print(data_panoptes)
 
@@ -1217,6 +1268,60 @@ def fill_metadata_container(url, n_clicks):
         )
 
         return card
+
+
+@app.callback(
+    Output({"type": "invisible-output", "index": MATCH}, "data"),
+    Input("url", "pathname"),
+    Input({"type": "homepage-button", "index": MATCH}, "n_clicks"),
+    Input({"type": "report-button-ashleys", "index": MATCH}, "n_clicks"),
+    Input({"type": "run-mosaicatcher-button", "index": MATCH}, "n_clicks"),
+    Input({"type": "report-button-mosaicatcher", "index": MATCH}, "n_clicks"),
+    Input({"type": "save-button", "index": MATCH}, "n_clicks"),
+    State({"type": "stored-selectedRows", "index": MATCH}, "data"),
+)
+def write_sample_state_to_json(
+    url,
+    homepage_button,
+    report_button,
+    run_mosaicatcher_button,
+    report_mosaicatcher_button,
+    save_button,
+    selected_rows,
+):
+    if url == "/":
+        raise dash.exceptions.PreventUpdate
+    else:
+        print("\n\n")
+        print("WRITING TO JSON")
+        print(
+            homepage_button,
+            report_button,
+            run_mosaicatcher_button,
+            report_mosaicatcher_button,
+            save_button,
+        )
+        run, sample = url.split("/")[1:3]
+
+        data_to_save = {
+            "run": run,
+            "sample": sample,
+            "stored-homepage-button": homepage_button,
+            "stored-report-button-ashleys": report_button,
+            "stored-save-button": save_button,
+            "stored-run-mosaicatcher-button": run_mosaicatcher_button,
+            "stored-report-button-mosaicatcher": report_mosaicatcher_button,
+            "stored-selectedRows": selected_rows,
+        }
+
+        print(data_to_save)
+        os.makedirs(f"data/{run}/{sample}/config", exist_ok=True)
+        with open(f"data/{run}/{sample}/config/belvedere.json", "w") as f:
+            print("Writing to json")
+            json.dump(data_to_save, f)
+        # with open(f"backup/{run}--{sample}.json", "w") as f:
+        #     json.dump(data_to_save, f)
+        return None
 
 
 @app.callback(
@@ -1591,7 +1696,7 @@ general_backend_components = html.Div(
             storage_type="memory",
             # data={},
         ),
-        # dcc.Interval(id="interval", interval=1000, n_intervals=0),
+        dcc.Interval(id="interval", interval=2000, n_intervals=0),
         # dcc.Interval(id="interval-progress", interval=20000, n_intervals=0),
         dcc.Location(id="url", refresh=False),
     ]
