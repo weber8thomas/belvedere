@@ -19,7 +19,7 @@ async def fetch_data_from_api():
                 )
                 response_json = response.json()
                 return response_json
-            except httpx.ReadTimeout:  # <- Modified here
+            except httpx.ReadTimeoutException:  # <- Modified here
                 if attempt == max_retries - 1:
                     print(
                         f"Failed to fetch progress from API after {max_retries} attempts."
