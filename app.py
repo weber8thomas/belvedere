@@ -21,7 +21,7 @@ from utils import merge_labels_and_info, get_files_structure
 from utils import columnDefs, defaultColDef, SIDEBAR_STYLE, CONTENT_STYLE
 
 # BELVEDERE
-from utils import categories, category_metadata, generate_form_element
+# from utils import categories, category_metadata, generate_form_element
 
 # PROGRESS
 from utils import LOGS_DIR, get_progress_from_file, get_progress_from_api
@@ -502,7 +502,11 @@ def fill_sample_wise_container(url):
                                     n_clicks=0,
                                     size="xl",
                                     leftIcon=DashIconify(icon="bxs:save"),
-                                    style={"width": "20%", "align": "center"},
+                                    style={
+                                        "width": "20%",
+                                        "align": "center",
+                                        # "height": "100%",
+                                    },
                                 )
                             ),
                             modal_save_success,
@@ -1278,6 +1282,11 @@ def fill_metadata_container(url, n_clicks):
     Input({"type": "run-mosaicatcher-button", "index": MATCH}, "n_clicks"),
     Input({"type": "report-button-mosaicatcher", "index": MATCH}, "n_clicks"),
     Input({"type": "save-button", "index": MATCH}, "n_clicks"),
+    Input({"type": "stored-homepage-button", "index": MATCH}, "n_clicks"),
+    State({"type": "stored-report-button-ashleys", "index": MATCH}, "data"),
+    State({"type": "stored-run-mosaicatcher-button", "index": MATCH}, "data"),
+    State({"type": "stored-report-button-mosaicatcher", "index": MATCH}, "data"),
+    State({"type": "stored-save-button", "index": MATCH}, "data"),
     State({"type": "stored-selectedRows", "index": MATCH}, "data"),
 )
 def write_sample_state_to_json(
@@ -1287,7 +1296,12 @@ def write_sample_state_to_json(
     run_mosaicatcher_button,
     report_mosaicatcher_button,
     save_button,
-    selected_rows,
+    stored_homepage_button,
+    stored_report_button,
+    stored_run_mosaicatcher_button,
+    stored_report_mosaicatcher_button,
+    stored_save_button,
+    stored_selected_rows,
 ):
     if url == "/":
         raise dash.exceptions.PreventUpdate
@@ -1301,17 +1315,24 @@ def write_sample_state_to_json(
             report_mosaicatcher_button,
             save_button,
         )
+        print(
+            stored_homepage_button,
+            stored_report_button,
+            stored_run_mosaicatcher_button,
+            stored_report_mosaicatcher_button,
+            stored_save_button,
+        )
         run, sample = url.split("/")[1:3]
 
         data_to_save = {
             "run": run,
             "sample": sample,
-            "stored-homepage-button": homepage_button,
-            "stored-report-button-ashleys": report_button,
-            "stored-save-button": save_button,
-            "stored-run-mosaicatcher-button": run_mosaicatcher_button,
-            "stored-report-button-mosaicatcher": report_mosaicatcher_button,
-            "stored-selectedRows": selected_rows,
+            "stored-homepage-button": stored_homepage_button,
+            "stored-report-button-ashleys": stored_report_button,
+            "stored-save-button": stored_save_button,
+            "stored-run-mosaicatcher-button": stored_run_mosaicatcher_button,
+            "stored-report-button-mosaicatcher": stored_report_mosaicatcher_button,
+            "stored-selectedRows": stored_selected_rows,
         }
 
         print(data_to_save)
@@ -1322,6 +1343,300 @@ def write_sample_state_to_json(
         # with open(f"backup/{run}--{sample}.json", "w") as f:
         #     json.dump(data_to_save, f)
         return None
+
+
+@app.callback(
+    Output({"type": "debug-container", "index": MATCH}, "children"),
+    Input({"type": "run-mosaicatcher-button", "index": ALL}, "n_clicks"),
+    # Input("interval", "n_intervals"),
+    Input({"type": "form-element", "index": ALL}, "children"),
+    State({"type": "email-form", "index": ALL}, "value"),
+    State({"type": "sv-calling-form", "index": ALL}, "value"),
+    State({"type": "arbigent-form", "index": ALL}, "checked"),
+    State({"type": "arbigent-bed-file-form", "index": ALL}, "value"),
+    State({"type": "blacklisting-form", "index": ALL}, "checked"),
+    prevent_initial_call=True,
+)
+def debug(
+    n,
+    form,
+    email,
+    sv_calling,
+    arbigent,
+    arbigent_bed_file,
+    blacklisting,
+    # blacklisting_bed_file,
+):
+    print("\n\n\n")
+
+    # print(form)
+    # print(email, sv_calling, arbigent, arbigent_bed_file)
+    print(f"EMAIL: {email}")
+    print(f"SV CALLING: {sv_calling}")
+    print(f"ARBIGENT: {arbigent}")
+    print(f"ARBIGENT BED FILE: {arbigent_bed_file}")
+    print(f"BLACKLISTING: {blacklisting}")
+
+    print("\n\n\n")
+
+    # return f"{email}"
+
+
+@app.callback(
+    Output({"type": "form-element", "index": MATCH}, "children"),
+    Input("url", "pathname"),
+    Input({"type": "run-mosaicatcher-button", "index": MATCH}, "n_clicks"),
+)
+def generate_form_element(selected_run, selected_sample):
+    # if meta["type"] == "bool":
+    #     input_element = (
+    #         dbc.Checklist(
+    #             id=id,
+    #             options=[{"label": "", "value": 1}],
+    #             inline=True,
+    #             switch=True,
+    #             value=[1],
+    #         )
+    #         if meta["type"] == "bool"
+    #         else dbc.Input(id=id, type=meta["type"])
+    #     )
+
+    # else:
+    #     input_element = dbc.Input(
+    #         id=id, type="text", value=meta.get("default", ""), className="m-0 p-0"
+    #     )
+
+    email_input = html.Div(
+        [
+            dmc.Title(
+                "Other parameters",
+                order=3,
+                style={"paddingBottom": "20px", "paddingTop": "10px"},
+            ),
+            dbc.Card(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Label(
+                                "Email",
+                                html_for={
+                                    "type": f"email-{selected_run}-{selected_sample}"
+                                },
+                                width=2,
+                            ),
+                            dbc.Col(
+                                [
+                                    dbc.Input(
+                                        type="email",
+                                        value="TEST@TEST.com",
+                                        id={
+                                            "type": "email-form",
+                                            "index": f"{selected_run}--{selected_sample}",
+                                        },
+                                        placeholder="Enter email",
+                                    ),
+                                    dbc.FormText(
+                                        "Specify your email address to be updated on the status of the pipeline",
+                                        color="secondary",
+                                    ),
+                                ],
+                                width=10,
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                ],
+                className="p-2",
+                style={"border": "1px solid grey", "padding": "10px 0px"},
+            ),
+        ]
+    )
+
+    sv_calling_input = html.Div(
+        [
+            dmc.Title(
+                "SV calling",
+                order=3,
+                style={"paddingBottom": "20px", "paddingTop": "10px"},
+            ),
+            dbc.Card(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dbc.Label(
+                                    "Norm Method",
+                                    html_for={
+                                        "type": "sv-calling-form",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    },
+                                ),
+                                width=2,
+                            ),
+                            dbc.Col(
+                                [
+                                    dmc.SegmentedControl(
+                                        id={
+                                            "type": f"sv-calling-form",
+                                            "index": f"{selected_run}--{selected_sample}",
+                                        },
+                                        data=[
+                                            {
+                                                "label": "Multistep normalisation",
+                                                "value": "multistep_normalisation_for_SV_calling",
+                                            },
+                                            {
+                                                "label": "HGSVC normalisation",
+                                                "value": "hgsvc_based_normalisation",
+                                            },
+                                        ],
+                                        color="red",
+                                        value="multistep_normalisation_for_SV_calling",
+                                    ),
+                                    html.Br(),
+                                    dbc.FormText(
+                                        "Rely on the multistep normalisation or the HGSVC normalisation applied to the counts file to be used for SV calling",
+                                        color="secondary",
+                                    ),
+                                ],
+                                width=10,
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                    html.Hr(),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dbc.Label(
+                                    "Blacklisting",
+                                    html_for={
+                                        "type": f"blacklisting-form",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    },
+                                ),
+                                width=2,
+                            ),
+                            dbc.Col(
+                                [
+                                    dmc.Switch(
+                                        id={
+                                            "type": f"blacklisting-form",
+                                            "index": f"{selected_run}--{selected_sample}",
+                                        },
+                                        checked=True,
+                                        # color="blue",
+                                        # label="multistep_normalisation_for_SV_calling",
+                                        # thumbIcon=DashIconify(icon="bi:mask"),
+                                        # size="lg",
+                                        color="red",
+                                    ),
+                                    dbc.FormText(
+                                        "Apply blacklisted regions to counts file",
+                                        color="secondary",
+                                    ),
+                                ],
+                                width=10,
+                            ),
+                        ],
+                        className="mb-3",
+                    ),
+                ],
+                className="p-2",
+                style={"border": "1px solid grey", "padding": "10px 0px"},
+            ),
+        ]
+    )
+
+    downstream_analysis_input = [
+        html.Div(
+            [
+                dmc.Title(
+                    "Downstream analysis",
+                    order=3,
+                    style={"paddingBottom": "20px", "paddingTop": "10px"},
+                ),
+                dbc.Card(
+                    [
+                        dbc.Row(
+                            [
+                                dbc.Label(
+                                    "Arbigent",
+                                    html_for={
+                                        "type": f"arbigent-form",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    },
+                                    width=2,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dmc.Switch(
+                                            id={
+                                                "type": f"arbigent-form",
+                                                "index": f"{selected_run}--{selected_sample}",
+                                            },
+                                            # label="ArbiGent",
+                                            checked=False,
+                                            color="red",
+                                        ),
+                                        dbc.FormText(
+                                            "Use ArbiGent (Arbitrary Genotyping) to genotype specific positions",
+                                            color="secondary",
+                                        ),
+                                    ],
+                                    width=10,
+                                ),
+                            ],
+                        ),
+                        html.Hr(),
+                        dbc.Row(
+                            [
+                                dbc.Label(
+                                    "ArbiGent BED file",
+                                    html_for={
+                                        "type": f"arbigent-bed-file-form",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    },
+                                    width=2,
+                                ),
+                                dbc.Col(
+                                    [
+                                        dbc.Input(
+                                            id={
+                                                "type": f"arbigent-bed-file-form",
+                                                "index": f"{selected_run}--{selected_sample}",
+                                            },
+                                            placeholder="Please enter path for ArbiGent BED file",
+                                            disabled=False
+                                            # color="blue",
+                                        ),
+                                        dbc.FormText(
+                                            "ArbiGent BED file location on the cluster",
+                                            color="secondary",
+                                        ),
+                                    ],
+                                    width=10,
+                                ),
+                            ],
+                        ),
+                    ],
+                    className="p-2",
+                    style={"border": "1px solid grey", "padding": "10px 0px"},
+                ),
+            ]
+        ),
+    ]
+
+    form = dbc.Form(
+        [
+            sv_calling_input,
+            html.Hr(),
+            *downstream_analysis_input,
+            html.Hr(),
+            email_input,
+        ]
+    )
+    return form
 
 
 @app.callback(
@@ -1487,6 +1802,7 @@ def populate_container_sample(
             and n_clicks_beldevere_button > beldevere_button_stored
         ):
             form_element = generate_form_element(selected_run, selected_sample)
+            print(form_element)
             x = len(selected_rows)
             color_x = "green" if x > 50 else "red"
             belvedere_layout = html.Div(
@@ -1531,7 +1847,13 @@ def populate_container_sample(
                                                 ]
                                             ),
                                             html.Hr(),
-                                            form_element,
+                                            html.Div(
+                                                id={
+                                                    "type": "form-element",
+                                                    "index": f"{selected_run}--{selected_sample}",
+                                                }
+                                            ),
+                                            # form_element,
                                         ],
                                         width=6,
                                         className="mx-auto",
@@ -1568,6 +1890,14 @@ def populate_container_sample(
                                         className="mx-auto",  # Adjusted button alignment
                                     ),
                                 ]
+                            ),
+                            dbc.Row(
+                                html.Div(
+                                    id={
+                                        "type": "debug-container",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    }
+                                ),
                             ),
                         ],
                         fluid=False,
