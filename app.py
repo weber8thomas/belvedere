@@ -2,6 +2,7 @@
 import collections
 import datetime
 import json
+import random
 import re
 from dash_iconify import DashIconify
 import subprocess
@@ -17,6 +18,11 @@ import yaml
 import time
 import dash_mantine_components as dmc
 from dash import html, Output, Input, State
+import dash_auth
+
+VALID_USERNAME_PASSWORD_PAIRS = {
+    'korbel': 'strandscape'
+}
 
 # STRAND-SCAPE utils
 from utils import merge_labels_and_info, get_files_structure
@@ -30,7 +36,13 @@ app = Dash(
     title="Strand-Scape",
     update_title=None,
 )
-server = app.server
+
+auth = dash_auth.BasicAuth(
+    app,
+    VALID_USERNAME_PASSWORD_PAIRS
+)
+
+# server = app.server
 
 # Specifying root folder for data
 # TODO: move to config file
@@ -735,7 +747,13 @@ def disable_report_button(progress_store, url):
         ):
             return False, True
         else:
-            return True, False
+            if (
+                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
+                == "Done"
+            ):
+                return True, False
+            else:
+                return True, True
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -1471,6 +1489,40 @@ def generate_form_element(selected_run, selected_sample):
     return form
 
 
+# @app.callback(
+#     Output({"type": "depictio-container", "index": MATCH}, "children"),
+#     Input("url", "pathname"),
+# )
+# def generate_depictio_container(url):
+#     if url == "/":
+#         raise dash.exceptions.PreventUpdate
+#     else:
+#         run, sample = url.split("/")[1:3]
+#         import plotly_express as px
+
+#         df = px.data.iris()
+#         data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
+#         data_lite_index = data_lite.index(f"{run}--{sample}")
+#         colors = ["red", "green", "blue"]
+#         fig = px.scatter(
+#             df,
+#             x=df.columns[random.randint(0, len(df.columns))],
+#             y=df.columns[random.randint(0, len(df.columns))],
+#             hover_name=df.columns[data_lite_index],
+#             color=df.columns[data_lite_index],
+#             title=f"{run} - {sample}",
+#         )
+
+#         graph = dcc.Graph(
+#             id={
+#                 "type": "depictio-graph",
+#                 "index": f"{run}--{sample}",
+#             },
+#             figure=fig,
+#         )
+#         return graph
+
+
 @app.callback(
     [
         Output({"type": "run-sample-container", "index": MATCH}, "children"),
@@ -1553,6 +1605,13 @@ def populate_container_sample(
             },
         )
 
+        depictio = html.Div(
+            id={
+                "type": "depictio-container",
+                "index": f"{selected_run}--{selected_sample}",
+            },
+        )
+
         homepage_layout = html.Div(
             children=[
                 dmc.Title(
@@ -1562,6 +1621,13 @@ def populate_container_sample(
                 ),
                 card,
                 html.Hr(),
+                # dmc.Title(
+                #     f"Depictio",
+                #     order=2,
+                #     style={"paddingTop": "20px", "paddingBottom": "20px"},
+                # ),
+                # depictio,
+                # html.Hr(),
                 dmc.Title(
                     "Ashleys-QC run",
                     order=2,
