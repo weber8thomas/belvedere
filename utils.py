@@ -25,22 +25,12 @@ def merge_labels_and_info(labels, info):
 
 def get_files_structure(root_folder):
     data_dict = collections.defaultdict(list)
-    for year_folder in os.listdir(root_folder):
-        year = year_folder.split("-")[
-            0
-        ]  # assuming the year is always the first part of the folder name
-        # if year not in data_dict:
-        #     data_dict[year] = {}
-        for run_name_folder in os.listdir(root_folder):
-            # print(run_name_folder)
-            run_name = run_name_folder
-            # if run_name not in data_dict[year]:
-            #     data_dict[run_name_folder] = list()
-            for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
-                sample_name = sample_folder
-                data_dict[run_name].append(sample_name)
+    for run_name_folder in os.listdir(root_folder):
+        run_name = run_name_folder
+        for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
+            sample_name = sample_folder
+            data_dict[run_name].append(sample_name)
 
-    # print(data_dict)
     return data_dict
 
 
@@ -384,13 +374,13 @@ CONTENT_STYLE = {
 
 # BELVEDERE
 
-# Load the metadata
-with open("config.yaml", "r") as stream:
-    try:
-        category_metadata = yaml.safe_load(stream)
-    except yaml.YAMLError as exc:
-        print(exc)
-        category_metadata = {}
+# # Load the metadata
+# with open("config.yaml", "r") as stream:
+#     try:
+#         category_metadata = yaml.safe_load(stream)
+#     except yaml.YAMLError as exc:
+#         print(exc)
+#         category_metadata = {}
 
 
 # Define the categories for grouping the parameters
