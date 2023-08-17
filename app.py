@@ -20,9 +20,7 @@ import dash_mantine_components as dmc
 from dash import html, Output, Input, State
 import dash_auth
 
-VALID_USERNAME_PASSWORD_PAIRS = {
-    'korbel': 'strandscape'
-}
+VALID_USERNAME_PASSWORD_PAIRS = {"korbel": "strandscape"}
 
 # STRAND-SCAPE utils
 from utils import merge_labels_and_info, get_files_structure
@@ -37,10 +35,7 @@ app = Dash(
     update_title=None,
 )
 
-auth = dash_auth.BasicAuth(
-    app,
-    VALID_USERNAME_PASSWORD_PAIRS
-)
+auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # server = app.server
 
@@ -48,8 +43,20 @@ auth = dash_auth.BasicAuth(
 # TODO: move to config file
 root_folder = os.path.expanduser("/Users/tweber/Gits/belvedere/data")
 
+# data = get_files_structure(root_folder)
+
+
 # Fetching the file structure based on the root folder
-data = get_files_structure(root_folder)
+def fetch_data():
+    response = requests.get("http://127.0.0.1:8059/get-data")
+    response_json_complete = response.json()
+    response_json = collections.OrderedDict(sorted(response_json_complete[0].items()))
+    print(response_json)
+    timestamp = response_json_complete[1]
+
+    print(response_json)
+    print(timestamp)
+    return response_json
 
 
 # Callback to populate the main content area based on the selected run and sample
@@ -445,13 +452,17 @@ def update_progress(url):
         ]
     )
 
+    tmp_data = fetch_data()
+
     dropdown_components = [
         dbc.Col(
             [
                 dmc.MultiSelect(
                     id="run-dropdown",
                     placeholder="Select a run",
-                    data=[{"label": run, "value": run} for run in sorted(data.keys())],
+                    data=[
+                        {"label": run, "value": run} for run in sorted(tmp_data.keys())
+                    ],
                     persistence=True,
                     persistence_type="session",
                     # radius="xl",
@@ -468,8 +479,8 @@ def update_progress(url):
                     id="sample-dropdown",
                     data=[
                         {"label": sample, "value": sample}
-                        for run in sorted(data.keys())
-                        for sample in sorted(data[run])
+                        for run in sorted(tmp_data.keys())
+                        for sample in sorted(tmp_data[run])
                     ],
                     placeholder="Select a sample",
                     persistence=True,
@@ -537,7 +548,8 @@ def set_run_value(options):
 def set_sample_options(selected_run):
     if not selected_run:
         raise dash.exceptions.PreventUpdate
-    sample_names = data[selected_run]
+    tmp_data = fetch_data()
+    sample_names = tmp_data[selected_run]
     return [
         {"label": sample_name, "value": sample_name} for sample_name in sample_names
     ]
@@ -817,7 +829,7 @@ def generate_progress_bar(entry):
     State("stored-refresh-button", "data"),
 )
 def update_progress(
-    data_panoptes, url, selected_run, selected_sample, n_clicks, stored_n_clicks
+    data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks
 ):
     print("UPDATE PROGRESS")
     print(n_clicks, stored_n_clicks)
@@ -840,6 +852,10 @@ def update_progress(
                 print("CONTINUE UPDATE")
                 print(n_clicks, stored_n_clicks)
                 components = []
+
+                data_panoptes = collections.OrderedDict(
+                    sorted(data_panoptes_raw.items())
+                )
 
                 # Generate progress bars
                 for entry in data_panoptes:
@@ -920,25 +936,25 @@ def update_progress(url, progress_store):
 
     response_json_complete = response.json()
     response_json = response_json_complete[0]
-    timestamp = response_json_complete[1]
+    timestamp_progress = response_json_complete[1]
 
     print(response_json)
-    print(timestamp)
+    print(timestamp_progress)
     print(progress_store)
     # if not response_json:
     #     # return dash.no_update
     #     raise dash.exceptions.PreventUpdate
 
     print("\n\n")
-    #     # Extract data
-    data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
+    # Extract data
+
+    tmp_data = fetch_data()
+    data_lite = [f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v)]
     data_panoptes_raw = [
         wf
         for wf in response_json["workflows"]
         if "--".join(wf["name"].split("--")[1:]) in data_lite
     ]
-    print(data_panoptes_raw)
-    print(data_lite)
 
     data_panoptes = collections.defaultdict(dict)
     for wf in data_panoptes_raw:
@@ -946,7 +962,6 @@ def update_progress(url, progress_store):
         data_panoptes[f"{run}--{sample}"][pipeline] = wf
 
     # data_panoptes = {wf["name"]: wf for wf in data_panoptes}
-    print(data_panoptes)
 
     for run_sample in data_lite:
         for pipeline in ["ashleys-qc-pipeline", "mosaicatcher-pipeline"]:
@@ -957,18 +972,22 @@ def update_progress(url, progress_store):
                     "jobs_done": 0,
                     "status": "not_started",
                 }
-    print("TOTOTOTO")
-    print(data_panoptes)
-    print(progress_store)
-
-    print(progress_store == data_panoptes)
     if progress_store == data_panoptes:
         print("NO UPDATE")
         return dash.no_update
     progress_store = data_panoptes
-    print(progress_store)
-    timestamp = f"Last update: {timestamp}"
-    return data_panoptes, timestamp
+
+    response = requests.get("http://127.0.0.1:8059/get-data")
+    response_json_complete = response.json()
+    response_json = response_json_complete[0]
+    timestamp_data = response_json_complete[1]
+
+    timestamp_data = dmc.Text(f"Last data update: {timestamp_data}", size="xs")
+    timestamp_progress = dmc.Text(
+        f"Last progress update: {timestamp_progress}", size="xs"
+    )
+    div_timestamps = html.Div([timestamp_data, timestamp_progress])
+    return data_panoptes, div_timestamps
 
 
 @app.callback(
@@ -981,9 +1000,14 @@ def update_progress(url, progress_store):
         return dash.no_update
     else:
         run, sample = url.split("/")[1:3]
-        progress_bar = generate_progress_bar(
-            progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]
-        )
+
+        if progress_store != {}:
+            progress_bar = generate_progress_bar(
+                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
+            )
+
+        else:
+            progress_bar = generate_progress_bar({"status": "not_started"})
         return progress_bar
 
 
@@ -997,9 +1021,17 @@ def update_progress(url, progress_store):
         return dash.no_update
     else:
         run, sample = url.split("/")[1:3]
-        progress_bar = generate_progress_bar(
-            progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
-        )
+        print("\n\n")
+        print(progress_store)
+        print("\n\n")
+
+        if progress_store != {}:
+            progress_bar = generate_progress_bar(
+                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
+            )
+
+        else:
+            progress_bar = generate_progress_bar({"status": "not_started"})
         return progress_bar
 
 
@@ -1201,19 +1233,20 @@ def trigger_snakemake(
             }
 
             # Trigger the API endpoint
-            # response = requests.post(
-            #     f"http://127.0.0.1:8059/trigger-snakemake/{run}--{sample}", json=snake_args
-            # )
+            response = requests.post(
+                f"http://127.0.0.1:8059/trigger-snakemake/mosaicatcher-pipeline--{run}--{sample}",
+                json=snake_args,
+            )
 
-            # # Check the response
-            # print(response.status_code)
-            # print(response.json())
-            # return (
-            #     html.Div(
-            #         id={"type": "email-validation-message", "index": f"{run}--{sample}"}
-            #     ),
-            #     n,
-            # )
+            # Check the response
+            print(response.status_code)
+            print(response.json())
+            return (
+                html.Div(
+                    id={"type": "email-validation-message", "index": f"{run}--{sample}"}
+                ),
+                n,
+            )
             print("TRIGGERED", n)
             return (
                 dbc.Modal(
@@ -1501,7 +1534,10 @@ def generate_form_element(selected_run, selected_sample):
 #         import plotly_express as px
 
 #         df = px.data.iris()
-#         data_lite = [f"{k}--{e}" for k, v in data.items() for e in sorted(v)]
+
+#         tmp_data = fetch_data()
+
+#         data_lite = [f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v)]
 #         data_lite_index = data_lite.index(f"{run}--{sample}")
 #         colors = ["red", "green", "blue"]
 #         fig = px.scatter(
@@ -1672,15 +1708,15 @@ def populate_container_sample(
             n_clicks_report_ashleys_button
             and n_clicks_report_ashleys_button > report_ashleys_button_stored
         ):
+            pipeline = "ashleys-qc-pipeline"
+            iframe = [
+                html.Iframe(
+                    src=f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    style={"width": "100%", "height": "900px"},
+                )
+            ]
             return (
-                [
-                    html.Iframe(
-                        src=dash.get_asset_url(
-                            f"watchdog_ashleys_data/{selected_run}/{selected_sample}/report.html"
-                        ),
-                        style={"width": "100%", "height": "900px"},
-                    )
-                ],
+                iframe,
                 n_clicks_homepage_button,
                 n_clicks_report_ashleys_button,
                 n_clicks_beldevere_button,
@@ -1691,15 +1727,17 @@ def populate_container_sample(
             n_clicks_report_mosaicatcher_button
             and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored
         ):
+            pipeline = "mosaicatcher-pipeline"
+
+            print(f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
+            iframe = [
+                html.Iframe(
+                    src=f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    style={"width": "100%", "height": "900px"},
+                )
+            ]
             return (
-                [
-                    html.Iframe(
-                        src=dash.get_asset_url(
-                            f"watchdog_ashleys_data/{selected_run}/{selected_sample}/report.html"
-                        ),
-                        style={"width": "100%", "height": "900px"},
-                    )
-                ],
+                iframe,
                 n_clicks_homepage_button,
                 n_clicks_report_ashleys_button,
                 n_clicks_beldevere_button,
@@ -1930,8 +1968,6 @@ app.layout = html.Div(
     ]
 )
 
-
-print(data)
 
 if __name__ == "__main__":
     app.run_server(debug=True)

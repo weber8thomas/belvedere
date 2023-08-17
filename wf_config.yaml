@@ -1,0 +1,33 @@
+General:
+  email:
+    desc: "To be informed of pipeline status"
+    type: string
+    required: False
+    default: '""'
+    category: "General"
+SV calling:
+  multistep_normalisation_for_SV_calling:
+    desc: "Enable / Disable multistep normalisation to be used in SV calling"
+    type: bool
+    required: False
+    default: False
+    category: "SV calling"
+  normalized_counts:
+    desc: Normalize or not mosaic counts
+    type: bool
+    required: False
+    default: True
+    category: "SV calling"
+Downstream analysis:
+  arbigent:
+    desc: Enable ArbiGent mode of execution to genotype specific regions of Strand Seq libraries
+    type: bool
+    required: False
+    default: False
+    category: "Downstream analysis"
+  arbigent_bed_file:
+    desc: ArbiGent BED file path that would be used to perform arbitrary segmentation
+    type: str
+    required: False
+    default: "workflow/data/arbigent/manual_segmentation.bed"
+    category: "Downstream analysis"
