@@ -387,8 +387,8 @@ CONTENT_STYLE = {
 
 
 # Group parameters by category (for simplicity, we will categorize based on the initial character)
-categories = list(category_metadata.keys())
-print(categories)
+# categories = list(category_metadata.keys())
+# print(categories)
 
 
 # PROGRESS

@@ -7,25 +7,9 @@ from fastapi.responses import FileResponse
 import pika
 import json
 import uvicorn
-
-# from config import load_config
-
+from config import load_config
 import os, sys
 import yaml
-
-
-
-configfile = "config.yaml"
-
-
-def load_config(configfile=configfile):
-    # Load the metadata
-    with open(configfile, "r") as stream:
-        try:
-            config = yaml.safe_load(stream)
-            return config
-        except yaml.YAMLError as exc:
-            sys.exit("YAML config not existing")
 
 
 config = load_config()
@@ -33,7 +17,7 @@ config = load_config()
 app = FastAPI()
 
 
-def load_from_json(filename):
+def load_from_json(filename: str):
     """Load the data from the JSON file."""
     try:
         with open(filename, "r") as file:
@@ -98,14 +82,14 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
             return {"workflows": []}, current_time
 
 
-
-
 @app.get("/get-progress")
-def get_progress():
+async def get_progress():
     data, timestamp = consume_last_message_from_rabbitmq(
         json_backup_filename=config["panoptes"]["json_status_backup"],
         queue=config["panoptes"]["rabbitmq"]["queue"],
     )
+
+    print(data, timestamp)
     if data == {}:
         data = {"workflows": []}
     return data, timestamp
@@ -300,17 +284,16 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     )
 
 
-
 @app.get("/reports/{run}--{sample}/{pipeline}/report.html")
 def serve_report(pipeline: str, run: str, sample: str):
-    file_path = f'/Users/tweber/Gits/belvedere/data/{run}/{sample}/{pipeline}_REPORT/report.html'
-    
+    file_path = f"/Users/tweber/Gits/belvedere/data/{run}/{sample}/{pipeline}_REPORT/report.html"
+
     # Check if the file exists
     if os.path.exists(file_path):
         return FileResponse(file_path, media_type="text/html")
     else:
         return {"error": "File not found!"}
-    
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8059)

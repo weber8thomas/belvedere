@@ -938,14 +938,14 @@ def update_progress(url, progress_store):
     response_json = response_json_complete[0]
     timestamp_progress = response_json_complete[1]
 
-    print(response_json)
-    print(timestamp_progress)
-    print(progress_store)
+    # print(response_json)
+    # print(timestamp_progress)
+    # print(progress_store)
     # if not response_json:
     #     # return dash.no_update
     #     raise dash.exceptions.PreventUpdate
 
-    print("\n\n")
+    # print("\n\n")
     # Extract data
 
     tmp_data = fetch_data()
@@ -1003,7 +1003,7 @@ def update_progress(url, progress_store):
 
         if progress_store != {}:
             progress_bar = generate_progress_bar(
-                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
+                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]
             )
 
         else:
@@ -1021,9 +1021,9 @@ def update_progress(url, progress_store):
         return dash.no_update
     else:
         run, sample = url.split("/")[1:3]
-        print("\n\n")
-        print(progress_store)
-        print("\n\n")
+        # print("\n\n")
+        # print(progress_store)
+        # print("\n\n")
 
         if progress_store != {}:
             progress_bar = generate_progress_bar(
@@ -1043,13 +1043,20 @@ def update_progress(url, progress_store):
         Input("url", "pathname"),
         Input({"type": "homepage-button", "index": MATCH}, "n_clicks"),
     ],
-    prevent_initial_call=True,
+    [State("stored-progress", "data")],
+    # prevent_initial_call=True,
 )
-def fill_metadata_container(url, n_clicks):
+def fill_metadata_container(url, n_clicks, progress_store):
     if url == "/":
         raise dash.exceptions.PreventUpdate
     else:
         run, sample = url.split("/")[1:3]
+        # if progress_store != {}:
+        #     ashleys_run_id = progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["id"]
+        #     mosaicatcher_run_id = progress_store[f"{run}--{sample}"][
+        #         "mosaicatcher-pipeline"
+        #     ]["id"]
+
         index = "PE20"
         genecore_filepath = f"/g/korbel/STOCKS/Sequencing/2023/{run}"
         pipeline_processed_data_filepath = (
@@ -1079,17 +1086,39 @@ def fill_metadata_container(url, n_clicks):
             # + [
             #     dbc.Row(
             #         [
-            #             dbc.Col(dmc.Text("Panoptes ashleys link", size="lg", weight=500), width=4),
+            #             dbc.Col(
+            #                 dmc.Text("Panoptes ashleys link", size="lg", weight=500),
+            #                 width=4,
+            #             ),
             #             dbc.Col(
             #                 dcc.Link(
             #                     "Panoptes",
-            #                     href=f"http://localhost:8058{run}--{sample}",
+            #                     href=f"http://localhost:8058/workflow/{ashleys_run_id}",
             #                     style={"color": "black", "text-decoration": "none"},
             #                 ),
             #                 width="auto",
             #             ),
+            #         ]
+            #     ),
+            #     dbc.Row(
+            #         [
+            #             dbc.Col(
+            #                 dmc.Text("Panoptes mosaicatcher link", size="lg", weight=500),
+            #                 width=4,
+            #             ),
+            #             dbc.Col(
+            #                 dcc.Link(
+            #                     "Panoptes",
+            #                     href=f"http://localhost:8058/workflow/{mosaicatcher_run_id}",
+            #                     style={"color": "black", "text-decoration": "none"},
+            #                 ),
+            #                 width="auto",
+            #             ),
+            #         ]
+            #     )
             # ]
         )
+        print(card)
 
         return card
 
@@ -1126,22 +1155,22 @@ def write_sample_state_to_json(
     if url == "/":
         raise dash.exceptions.PreventUpdate
     else:
-        print("\n\n")
-        print("WRITING TO JSON")
-        print(
-            homepage_button,
-            report_button,
-            run_mosaicatcher_button,
-            report_mosaicatcher_button,
-            save_button,
-        )
-        print(
-            stored_homepage_button,
-            stored_report_button,
-            stored_run_mosaicatcher_button,
-            stored_report_mosaicatcher_button,
-            stored_save_button,
-        )
+        # print("\n\n")
+        # print("WRITING TO JSON")
+        # print(
+        #     homepage_button,
+        #     report_button,
+        #     run_mosaicatcher_button,
+        #     report_mosaicatcher_button,
+        #     save_button,
+        # )
+        # print(
+        #     stored_homepage_button,
+        #     stored_report_button,
+        #     stored_run_mosaicatcher_button,
+        #     stored_report_mosaicatcher_button,
+        #     stored_save_button,
+        # )
         run, sample = url.split("/")[1:3]
 
         data_to_save = {
@@ -1155,7 +1184,7 @@ def write_sample_state_to_json(
             "stored-selectedRows": stored_selected_rows,
         }
 
-        print(data_to_save)
+        # print(data_to_save)
         os.makedirs(f"data/{run}/{sample}/config", exist_ok=True)
         with open(f"data/{run}/{sample}/config/belvedere.json", "w") as f:
             print("Writing to json")
@@ -1729,7 +1758,9 @@ def populate_container_sample(
         ):
             pipeline = "mosaicatcher-pipeline"
 
-            print(f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
+            print(
+                f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
+            )
             iframe = [
                 html.Iframe(
                     src=f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
