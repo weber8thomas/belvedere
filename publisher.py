@@ -12,6 +12,7 @@ from config import load_config
 config = load_config()
 
 
+
 def fetch_data_from_api():
     url_api = "http://127.0.0.1:8058/api/workflows"
     max_retries = 5
