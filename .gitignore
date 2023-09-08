@@ -150,3 +150,4 @@ assets/
 # Ignore all .DS_Store files in this project
 **/.DS_Store
 dev/jbrowse_dev/assets/
+*.json

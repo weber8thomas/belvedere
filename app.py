@@ -367,7 +367,7 @@ def fill_sample_wise_container(url):
                                 ),
                                 dcc.Link(
                                     dmc.ActionIcon(
-                                        DashIconify(icon="mdi:refresh", width=50),
+                                        DashIconify(icon="mdi:refresh", width=0),
                                         id={
                                             "type": "refresh-button-samplewise",
                                             "index": f"{selected_run}--{selected_sample}",
@@ -375,7 +375,8 @@ def fill_sample_wise_container(url):
                                         n_clicks=0,
                                     ),
                                     href=f"/{selected_run}/{selected_sample}",
-                                    style={"color": "black", "text-decoration": "none"},
+                                    style={"display": "none", "pointer-events": "none"},
+                                    # style={"color": "black", "text-decoration": "none"},
                                 ),
                             ],
                         ),
@@ -437,12 +438,13 @@ def update_progress(url):
                     dbc.Col(
                         dcc.Link(
                             dmc.ActionIcon(
-                                DashIconify(icon="mdi:refresh", width=50),
+                                DashIconify(icon="mdi:refresh", width=0),
                                 id="refresh-button",
                                 n_clicks=0,
                             ),
                             href="/",
-                            style={"color": "black", "text-decoration": "none"},
+                            style={"display": "none", "pointer-events": "none"},
+                            # style={"color": "black", "text-decoration": "none"},
                         ),
                         width="auto",
                         style={"float": "right"},
