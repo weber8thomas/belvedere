@@ -1,7 +1,7 @@
 
-# Strand-Scape v0.1 Documentation
+# Strand-Scape v0.1.0 Documentation
 
-Welcome to Strand-Scape v0.1, an intuitive web platform designed to enhance the user experience for MosaiCatcher via a graphical interface.
+Welcome to Strand-Scape v0.1.0, an intuitive web platform designed to enhance the user experience for MosaiCatcher via a graphical interface.
 
 ## Introduction
 
