@@ -8,7 +8,7 @@ Welcome to Strand-Scape v0.1, an intuitive web platform designed to enhance the 
 Strand-Scape simplifies the process of utilizing MosaiCatcher by providing a streamlined interface. 
 
 
-## Running Strand-Scape
+## Running Strand-Scape (admin side)
 
 #TODO 
 
@@ -19,6 +19,9 @@ Strand-Scape simplifies the process of utilizing MosaiCatcher by providing a str
 - 4. app.py
 
 
+## Using Strand-Scape (user side)
+
+#TODO
 ## Structure of Strand-Scape
 
 ![Alt text](docs/image.png)
