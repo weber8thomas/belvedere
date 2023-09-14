@@ -1,0 +1,29 @@
+name: strandscape
+channels:
+  - conda-forge
+  - bioconda
+  - anaconda
+dependencies:
+  - python
+  - dash
+  - dash-bootstrap-components
+  - pandas
+  - pika
+  - fastapi
+  - requests
+  - yaml
+  - pip
+  - subprocess
+  - rabbitmq-server
+  - uvicorn
+  - dash_iconify
+  - dash_ag_grid
+  - dash_mantine_components
+  - dash_auth
+  - httpx
+  - pip:
+      - dash-iconify
+      - dash-ag-grid
+      - dash-mantine-components
+      - dash-auth
+      - httpx
