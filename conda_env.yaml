@@ -13,7 +13,6 @@ dependencies:
   - requests
   - yaml
   - pip
-  - subprocess
   - rabbitmq-server
   - uvicorn
   - dash-auth
