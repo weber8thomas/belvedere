@@ -10,8 +10,12 @@ data:
 
 # Wf Status
 panoptes:
+  url: "http://127.0.0.1:8058"
   json_status_backup : "status.json"
   rabbitmq:
     exchange: data
     queue: data_queue
     routing_key: latest_data
+
+fastapi:
+  url: "http://127.0.0.1:8059"
