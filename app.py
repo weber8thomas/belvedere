@@ -49,8 +49,9 @@ root_folder = os.path.expanduser(config["data"]["data_folder"])
 
 # Fetching the file structure based on the root folder
 def fetch_data():
-    FASTAPI_URL = config["fastapi"]["url"]
-    response = requests.get(f"{FASTAPI_URL}/get-data")
+    FASTAPI_HOST = config["fastapi"]["host"]
+    FASTAPI_PORT = config["fastapi"]["port"]
+    response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
     response_json_complete = response.json()
     response_json = collections.OrderedDict(sorted(response_json_complete[0].items()))
     print(response_json)
