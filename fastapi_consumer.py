@@ -223,7 +223,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     dry_run_options = ["-c", "1", "-n", "-q"]
     snakemake_binary = "/g/korbel2/weber/miniconda3/envs/snakemake_latest/bin/snakemake"
     snakemake_binary = "/Users/tweber/miniconda3/envs/snakemake_latest/bin/snakemake"
-    wms_monitor_options = "http://localhost:8058"
+    wms_monitor_options = config["panoptes"]["url"]
     wms_monitor_renaming_option = f"name={run_id}"
     sample_name = f"{run_id}".split("--")[2]
 
@@ -286,7 +286,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
 @app.get("/reports/{run}--{sample}/{pipeline}/report.html")
 def serve_report(pipeline: str, run: str, sample: str):
-    file_path = f"/Users/tweber/Gits/belvedere/data/{run}/{sample}/{pipeline}_REPORT/report.html"
+    data_folder = config["data"]["data_folder"]
+    file_path = f"{data_folder}/{run}/{sample}/{pipeline}_REPORT/report.html"
 
     # Check if the file exists
     if os.path.exists(file_path):

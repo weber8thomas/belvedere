@@ -20,7 +20,7 @@ import dash_mantine_components as dmc
 from dash import html, Output, Input, State
 import dash_auth
 
-VALID_USERNAME_PASSWORD_PAIRS = {"korbel": "strandscape"}
+VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
 
 # STRAND-SCAPE utils
 from utils import merge_labels_and_info, get_files_structure
@@ -39,16 +39,18 @@ auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # server = app.server
 
-# Specifying root folder for data
-# TODO: move to config file
-root_folder = os.path.expanduser("/Users/tweber/Gits/belvedere/data")
+from config import data_folder, load_config
+
+config = load_config("config.yaml")
+root_folder = os.path.expanduser(data_folder)
 
 # data = get_files_structure(root_folder)
 
 
 # Fetching the file structure based on the root folder
 def fetch_data():
-    response = requests.get("http://127.0.0.1:8059/get-data")
+    FASTAPI_URL = config["fastapi"]["url"]
+    response = requests.get(f"{FASTAPI_URL}/get-data")
     response_json_complete = response.json()
     response_json = collections.OrderedDict(sorted(response_json_complete[0].items()))
     print(response_json)
@@ -1914,6 +1916,43 @@ def populate_container_sample(
             )
 
 
+@app.callback(
+    Output("sidebar-stats", "children"),
+    Input("url", "pathname"),
+)
+def generate_sidebar_stats(url):
+    if url:
+        print("\n\n")
+        print("generating sidebar stats")
+        data = fetch_data()
+        # print(data)
+
+        nb_runs = len(list(data.keys()))
+        print(nb_runs)
+        nb_samples = sum([len(v) for k, v in data.items()])
+        print(nb_samples)
+        layout = [
+            dmc.Center(
+                [
+                    dmc.Text(
+                        f"Number of runs: {nb_runs}",
+                        size="sm",
+                        weight=400,
+                    ),
+                ],
+            ),
+            dmc.Center(
+                dmc.Text(
+                    f"Number of samples: {nb_samples}",
+                    size="sm",
+                    weight=400,
+                ),
+            ),
+        ]
+        print(layout)
+        return layout
+
+
 sidebar = html.Div(
     [
         dbc.Row(
@@ -1933,15 +1972,27 @@ sidebar = html.Div(
         ),
         html.Hr(),
         dmc.Center(
-            dbc.Row(
-                [
-                    dbc.Col(DashIconify(icon="mdi:eiffel-tower", width=20), width=1),
-                    dbc.Col(dmc.Title("Belvedere", order=4)),
-                ]
+            dmc.Text(
+                "Welcome to Strand-Scape!",
+                size="lg",
+                weight=500,
             )
         ),
         html.Hr(),
-        html.Div(id="timestamp-progress"),
+        html.Div(id="sidebar-stats"),
+        # dmc.Center(
+        #     dbc.Row(
+        #         [
+        #             dbc.Col(DashIconify(icon="mdi:eiffel-tower", width=20), width=1),
+        #             # dbc.Col(dmc.Title("Belvedere", order=4)),
+        #         ]
+        #     )
+        # ),
+        # html.Hr(),
+        html.Div(
+            id="timestamp-progress",
+            style={"position": "absolute", "bottom": "0", "width": "100%"},
+        ),
         dbc.Modal(
             [
                 dbc.ModalHeader(

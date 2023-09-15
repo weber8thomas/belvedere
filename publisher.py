@@ -14,7 +14,9 @@ config = load_config()
 
 
 def fetch_data_from_api():
-    url_api = "http://127.0.0.1:8058/api/workflows"
+    # PANOPTES_API = "http://127.0.0.1:8058"
+    PANOPTES_API = config["panoptes"]
+    url_api = f"{PANOPTES_API}/api/workflows"
     max_retries = 5
     wait_time = 10
 
@@ -98,6 +100,7 @@ if __name__ == "__main__":
 
     while True:
 
+        
         # Wf progress status - Panoptes
         data = fetch_data_from_api()
         if data != {}:
