@@ -288,6 +288,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 def serve_report(pipeline: str, run: str, sample: str):
     data_folder = config["data"]["data_folder"]
     file_path = f"{data_folder}/{run}/{sample}/{pipeline}_REPORT/report.html"
+    print(file_path)
 
     # Check if the file exists
     if os.path.exists(file_path):

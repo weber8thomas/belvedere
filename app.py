@@ -1742,9 +1742,10 @@ def populate_container_sample(
             and n_clicks_report_ashleys_button > report_ashleys_button_stored
         ):
             pipeline = "ashleys-qc-pipeline"
+            FASTAPI_URL = config["fastapi"]["url"]
             iframe = [
                 html.Iframe(
-                    src=f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    src=f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
                     style={"width": "100%", "height": "900px"},
                 )
             ]
@@ -1763,11 +1764,11 @@ def populate_container_sample(
             pipeline = "mosaicatcher-pipeline"
 
             print(
-                f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
+                f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
             )
             iframe = [
                 html.Iframe(
-                    src=f"http://localhost:8059/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    src=f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
                     style={"width": "100%", "height": "900px"},
                 )
             ]
