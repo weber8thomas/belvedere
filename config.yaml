@@ -18,4 +18,11 @@ panoptes:
     routing_key: latest_data
 
 fastapi:
-  url: "http://127.0.0.1:8059"
+  host: "http://localhost"
+  # host: "http://seneca.embl.de"
+  port: 8059
+
+dash:
+  host: "http://localhost"
+  # host: "http://seneca.embl.de"
+  port: 8060

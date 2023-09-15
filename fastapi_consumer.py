@@ -296,6 +296,3 @@ def serve_report(pipeline: str, run: str, sample: str):
     else:
         return {"error": "File not found!"}
 
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8059)

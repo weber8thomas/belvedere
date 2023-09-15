@@ -1762,6 +1762,8 @@ def populate_container_sample(
             and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored
         ):
             pipeline = "mosaicatcher-pipeline"
+            FASTAPI_URL = config["fastapi"]["url"]
+
 
             print(
                 f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
@@ -2055,4 +2057,4 @@ app.layout = html.Div(
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, host=config["dash"]["host"], port=config["dash"]["port"])
