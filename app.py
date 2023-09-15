@@ -936,7 +936,9 @@ def update_progress(
 )
 def update_progress(url, progress_store):
     # Fetch processed data from FastAPI service
-    response = requests.get("http://127.0.0.1:8059/get-progress")
+    FASTAPI_HOST = config["fastapi"]["host"]
+    FASTAPI_PORT = config["fastapi"]["port"]
+    response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-progress")
 
     response_json_complete = response.json()
     response_json = response_json_complete[0]
@@ -981,7 +983,9 @@ def update_progress(url, progress_store):
         return dash.no_update
     progress_store = data_panoptes
 
-    response = requests.get("http://127.0.0.1:8059/get-data")
+    FASTAPI_HOST = config["fastapi"]["host"]
+    FASTAPI_PORT = config["fastapi"]["port"]
+    response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
     response_json_complete = response.json()
     response_json = response_json_complete[0]
     timestamp_data = response_json_complete[1]
@@ -1265,9 +1269,12 @@ def trigger_snakemake(
                 "blacklisting": blacklisting,
             }
 
+            FASTAPI_HOST = config["fastapi"]["host"]
+            FASTAPI_PORT = config["fastapi"]["port"]
+
             # Trigger the API endpoint
             response = requests.post(
-                f"http://127.0.0.1:8059/trigger-snakemake/mosaicatcher-pipeline--{run}--{sample}",
+                f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/mosaicatcher-pipeline--{run}--{sample}",
                 json=snake_args,
             )
 
@@ -1742,10 +1749,11 @@ def populate_container_sample(
             and n_clicks_report_ashleys_button > report_ashleys_button_stored
         ):
             pipeline = "ashleys-qc-pipeline"
-            FASTAPI_URL = config["fastapi"]["url"]
+            FASTAPI_HOST = config["fastapi"]["host"]
+            FASTAPI_PORT = config["fastapi"]["port"]
             iframe = [
                 html.Iframe(
-                    src=f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    src=f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
                     style={"width": "100%", "height": "900px"},
                 )
             ]
@@ -1762,15 +1770,14 @@ def populate_container_sample(
             and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored
         ):
             pipeline = "mosaicatcher-pipeline"
-            FASTAPI_URL = config["fastapi"]["url"]
-
-
+            FASTAPI_HOST = config["fastapi"]["host"]
+            FASTAPI_PORT = config["fastapi"]["port"]
             print(
-                f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
+                f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
             )
             iframe = [
                 html.Iframe(
-                    src=f"{FASTAPI_URL}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    src=f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
                     style={"width": "100%", "height": "900px"},
                 )
             ]
