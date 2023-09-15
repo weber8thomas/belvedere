@@ -39,10 +39,10 @@ auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # server = app.server
 
-from config import data_folder, load_config
+from config import load_config
 
 config = load_config("config.yaml")
-root_folder = os.path.expanduser(data_folder)
+root_folder = os.path.expanduser(config["data"]["data_folder"])
 
 # data = get_files_structure(root_folder)
 
