@@ -295,7 +295,7 @@ def fill_sample_wise_container(url):
                             radius="xl",
                             variant="gradient",
                             n_clicks=0,
-                            size="lg",
+                            size="sm",
                             leftIcon=DashIconify(icon="mdi:home"),
                         ),
                         dmc.Button(
@@ -306,7 +306,7 @@ def fill_sample_wise_container(url):
                             },
                             radius="xl",
                             color="pink",
-                            size="lg",
+                            size="sm",
                             n_clicks=0,
                             disabled=True,
                             leftIcon=DashIconify(icon="mdi:eye"),
@@ -321,7 +321,7 @@ def fill_sample_wise_container(url):
                             n_clicks=0,
                             color="orange",
                             disabled=True,
-                            size="lg",
+                            size="sm",
                             leftIcon=DashIconify(icon="mdi:hand-tap"),
                         ),
                         dmc.Button(
@@ -334,7 +334,7 @@ def fill_sample_wise_container(url):
                             color="red",
                             n_clicks=0,
                             disabled=True,
-                            size="lg",
+                            size="sm",
                             leftIcon=DashIconify(icon="ooui:logo-wikimedia-discovery"),
                         ),
                         dmc.Button(
@@ -347,7 +347,7 @@ def fill_sample_wise_container(url):
                             n_clicks=0,
                             color="grape",
                             disabled=True,
-                            size="lg",
+                            size="sm",
                             leftIcon=DashIconify(icon="mdi:eye"),
                         ),
                     ],
@@ -362,7 +362,7 @@ def fill_sample_wise_container(url):
                             [
                                 dmc.Title(
                                     f"Run : {selected_run} - Sample: {selected_sample}",
-                                    order=2,
+                                    order=3,
                                     style={
                                         "paddingBottom": "20px",
                                         "paddingTop": "20px",
