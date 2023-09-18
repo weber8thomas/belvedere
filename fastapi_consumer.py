@@ -104,147 +104,228 @@ def get_data():
     return data, timestamp
 
 
-def run_second_command(
-    cmd, profile_slurm, data_location, date_folder, working_directory="."
-):
-    """Run the second command and write the output to a log file."""
-
-    print("\nThe output is as expected.")
-    print("Running command: %s", " ".join(cmd))
-
-    os.makedirs("watchdog/logs/per-run", exist_ok=True)
-
-    # Get the current date and time
-    now = datetime.datetime.now()
-
-    # Convert it to a string
-    current_time = now.strftime("%Y%m%d%H%M%S")
-
-    with open(f"test.log", "w") as f:
-        process2 = subprocess.Popen(
-            cmd,
-            # cmd + profile_slurm,
-            stdout=f,
-            stderr=f,
-            universal_newlines=True,
-            cwd=working_directory,  # Change working directory
-            env=my_env,
-        )
-        process2.wait()
-
-        print("Return code: %s", process2.returncode)
-
-    # Change the permissions of the new directory
-    # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
-
-
-def execute_command(
-    cmd,
-    profile_dry_run,
-    profile_slurm,
-    dry_run_options,
-    wms_monitor_args,
-    data_location,
-    date_folder,
-    working_directory=".",
-):
-    # def execute_command(self, directory_path, prefix, working_directory="."):
-    """Execute the command."""
-
-    # Change directory and run the snakemake command
-    # date_folder = directory_path.split("/")[-1]
-
-    print("Running command: %s", " ".join(cmd + profile_dry_run + dry_run_options))
-
-    # process = subprocess.Popen(
-    #     # cmd + profile_dry_run + dry_run_options,
-    #     cmd + dry_run_options,
-    #     stdout=subprocess.PIPE,
-    #     stderr=subprocess.STDOUT,
-    #     universal_newlines=True,
-    #     cwd=working_directory,  # Change working directory
-    # )
-
-    my_env = os.environ.copy()
-    my_env[
-        "PATH"
-    ] = f"/Users/tweber/miniconda3/envs/snakemake_latest/bin:{my_env['PATH']}"
-
-    print(my_env)
-    print(working_directory)
-    with open(f"test.log", "w") as f:
-        process = subprocess.Popen(
-            cmd + wms_monitor_args,
-            # cmd + profile_slurm,
-            stdout=f,
-            stderr=f,
-            universal_newlines=True,
-            cwd=working_directory,  # Change working directory
-            env=my_env,
-        )
-        print(cmd + wms_monitor_args)
-        print(" ".join(cmd + wms_monitor_args))
-        print(process)
-        print(process.stdout)
-        print(process.stderr)
-        process.wait()
-
-    # Variable to store the penultimate line
-    penultimate_line = ""
-
-    # Read the output line by line in real-time
-    # for line in iter(process.stdout.readline, ""):
-    #     print(line.strip())  # log line in real-time
-    #     if line.strip():  # If line is not blank
-    #         penultimate_line = line.strip()
-
-    # Wait for the subprocess to finish
-    # process.wait()
-    print("Return code: %s", process.returncode)
-
-    # Check the penultimate line
-    # if str(process.returncode) == str(0):
-    #     # self.run_second_command(cmd, profile_slurm, data_location, date_folder)
-    #     run_second_command(
-    #         cmd + wms_monitor_args, profile_slurm, data_location, date_folder
-    #     )
-    # else:
-    #     print("\nThe output is not as expected.")
-
-
 @app.post("/trigger-snakemake/{run_id}")
 def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
-    print(run_id)
+    def execute_command(
+        cmd,
+        profile_dry_run,
+        profile_slurm,
+        dry_run_options,
+        wms_monitor_args,
+        data_location,
+        date_folder,
+        working_directory=".",
+        report_location=".",
+        pipeline=str,
+    ):
+        """Execute the command using dry-run to make sure the DAG is well computed"""
+        
 
-    # data_location = "/scratch/tweber/DATA/MC_DATA/STOCKS"
-    # publishdir_location = "/g/korbel/WORKFLOW_RESULTS"
+        print("Running command: %s", " ".join(cmd + profile_dry_run + dry_run_options))
+
+        # Complete environment
+        snakemake_binary_folder = "/".join(
+            config["snakemake"]["binary"].split("/")[:-1]
+        )
+        my_env = os.environ.copy()
+        my_env["PATH"] = f"{snakemake_binary_folder}:{my_env['PATH']}"
+
+
+
+        # Prepare process to perform dry run
+        process = subprocess.Popen(
+            cmd + profile_dry_run + dry_run_options,
+            # cmd + dry_run_options,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            cwd=working_directory,  # Change working directory
+            env=my_env,
+        )
+
+        # Get the current date and time
+        now = datetime.datetime.now()
+        # Convert it to a string
+        current_time = now.strftime("%Y%m%d%H%M%S")
+
+        # 
+        watchdog_logs_folder = config["watchdog"]["logs_folder"] 
+        os.makedirs("watchdog/logs/per-run", exist_ok=True)
+
+        with open(
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log", "w"
+        ) as f:
+            process = subprocess.Popen(
+                cmd + profile_slurm + wms_monitor_args,
+                stdout=f,
+                stderr=f,
+                universal_newlines=True,
+                cwd=working_directory,  # Change working directory
+                env=my_env,
+            )
+
+        # Variable to store the penultimate line
+        penultimate_line = ""
+
+        # Read the output line by line in real-time
+        for line in iter(process.stdout.readline, ""):
+            print(line.strip())  # log line in real-time
+            if line.strip():  # If line is not blank
+                penultimate_line = line.strip()
+
+        # Wait for the subprocess to finish
+        process.wait()
+        print("Return code: %s", process.returncode)
+
+        # Check the penultimate line
+        if str(process.returncode) == str(0):
+            # self.run_second_command(cmd, profile_slurm, data_location, date_folder)
+            run_second_command(
+                cmd + wms_monitor_args,
+                profile_slurm,
+                profile_dry_run,
+                data_location,
+                date_folder,
+                working_directory,
+                my_env,
+                report_location,
+                pipeline,
+            )
+        else:
+            print("\nThe output is not as expected.")
+
+    def run_second_command(
+        cmd,
+        profile_slurm,
+        profile_dry_run,
+        data_location,
+        date_folder,
+        working_directory,
+        my_env,
+        report_location,
+        pipeline,
+    ):
+        """Run the second command and write the output to a log file."""
+
+        print("\nThe output is as expected.")
+        print("Running command: %s", " ".join(cmd))
+
+        report_options = [
+            "--report",
+            f"{report_location}",
+            "--report-stylesheet",
+            "/g/korbel2/weber/workspace/mosaicatcher-update/workflow/report/custom-stylesheet.css",
+        ]
+
+        watchdog_logs_folder = config["watchdog"]["logs_folder"] 
+
+        # Get the current date and time
+        now = datetime.datetime.now()
+
+        # Convert it to a string
+        current_time = now.strftime("%Y%m%d%H%M%S")
+
+        with open(
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log", "w"
+        ) as f:
+            process2 = subprocess.Popen(
+                # cmd,
+                cmd + profile_slurm,
+                stdout=f,
+                stderr=f,
+                universal_newlines=True,
+                cwd=working_directory,  # Change working directory
+                env=my_env,
+            )
+            process2.wait()
+
+            print("Return code: %s", process2.returncode)
+
+        logging.info("Generating ashleys report.")
+        os.makedirs(os.path.dirname(report_location), exist_ok=True)
+
+
+        # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
+        logging.info(
+            "Running command: %s", " ".join(cmd + profile_slurm + report_options)
+        )
+
+        # Change the permissions of the new directory
+        # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
+
+        with open(
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log", "w"
+        ) as f:
+            print(cmd + profile_slurm + report_options)
+            process2 = subprocess.Popen(
+                cmd + profile_dry_run + report_options,
+                stdout=f,
+                stderr=f,
+                universal_newlines=True,
+            )
+            # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
+            process2.wait()
+
+            logging.info("Return code: %s", process2.returncode)
+
+        # ZIPFILE
+
+        import zipfile
+
+        # Check if the file exists and is a valid zip file
+        if zipfile.is_zipfile(report_location):
+            # Specify the directory where you want to extract the contents
+            # If you want to extract in the same directory as the zip file, just use the parent directory
+            extract_location = "/".join(report_location.split("/")[:-1])
+
+            # Extract the zip file
+            with zipfile.ZipFile(report_location, "r") as zip_ref:
+                zip_ref.extractall(extract_location)
+            print(f"Extracted the archive to {extract_location}")
+        else:
+            print(f"{report_location} is not a valid zip file.")
+
+        # Change the permissions of the new directory
+        subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
+
+
+    ############
+    # START
+    ############
+
+    # Settings & variables
+
+    data_location = config["data"]["complete_data_folder"]
+    publishdir_location = config["data"]["data_folder"]
     profile_slurm = ["--profile", "workflow/snakemake_profiles/HPC/slurm_EMBL/"]
     profile_dry_run = ["--profile", "workflow/snakemake_profiles/local/conda/"]
     dry_run_options = ["-c", "1", "-n", "-q"]
-    snakemake_binary = "/g/korbel2/weber/miniconda3/envs/snakemake_latest/bin/snakemake"
-    snakemake_binary = "/Users/tweber/miniconda3/envs/snakemake_latest/bin/snakemake"
+    snakemake_binary = config["snakemake"]["binary"]
+    # snakemake_binary = "/Users/tweber/miniconda3/envs/snakemake_latest/bin/snakemake"
     wms_monitor_options = config["panoptes"]["url"]
     wms_monitor_renaming_option = f"name={run_id}"
     sample_name = f"{run_id}".split("--")[2]
+    pipeline = "mosaicatcher-pipeline"
+    report_location = f"{publishdir_location}/{sample_name}/reports/{sample_name}_{pipeline}_report.zip"
 
-    # Append the snake_args to cmd
-    snake_args_list = list()
-    for key, value in snake_args.items():
-        if value is not None:
-            snake_args_list.append(f"{key}={value}")
+    cmd = [
+        f"{snakemake_binary}",
+        "--config",
+        "genecore=True",
+        # f"genecore_prefix={genecore_prefix}",
+        # f"genecore_date_folder={date_folder}",
+        # f"genecore_regex_element={prefix}",
+        f'samples_to_process=["{sample_name}"]',
+        "multistep_normalisation=True",
+        "MultiQC=True",
+        "split_qc_plot=False",
+        f"publishdir={publishdir_location}",
+        "email=thomas.weber@embl.de",
+        f"data_location={data_location}",
+        "--nolock",
+    ]
 
-    # cmd = [
-    #     f"{snakemake_binary}",
-    #     "--nolock",
-    #     "--rerun-triggers mtime",
-    #     "--config",
-    #     "genecore=True",
-    #     "split_qc_plot=False",
-    #     # f"publishdir={publishdir_location}",
-    #     # "email=thomas.weber@embl.de",
-    #     f"data_location={data_location}",
-    #     f'samples_to_process="[{sample_name}]"',
-    # ]
+    # Debug
 
     cmd = [
         f"{snakemake_binary}",
@@ -262,6 +343,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # f'samples_to_process="[{sample_name}]"',
     ]
 
+    # Panoptes 
+
     wms_monitor_args = [
         "--wms-monitor",
         f"{wms_monitor_options}",
@@ -269,8 +352,16 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         f"{wms_monitor_renaming_option}",
     ]
 
+
+    # Append the snake_args to cmd
+    snake_args_list = list()
+    for key, value in snake_args.items():
+        if value is not None:
+            snake_args_list.append(f"{key}={value}")
+
     cmd = cmd + snake_args_list
 
+    # Triggers snakemake command
     # execute_command(directory_path, prefixes.pop())
     execute_command(
         cmd=cmd,
@@ -280,14 +371,19 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         wms_monitor_args=wms_monitor_args,
         data_location="",
         date_folder="",
-        working_directory="/Users/tweber/Gits/snakemake_logs_dev",
+        working_directory=config["snakemake"]["repository_location"],
+        report_location=report_location,
+        # working_directory="/Users/tweber/Gits/snakemake_logs_dev",
+        pipeline=pipeline,
     )
 
 
 @app.get("/reports/{run}--{sample}/{pipeline}/report.html")
 def serve_report(pipeline: str, run: str, sample: str):
     data_folder = config["data"]["data_folder"]
-    file_path = f"{data_folder}/{run}/{sample}/{pipeline}_REPORT/report.html"
+    file_path = (
+        f"{data_folder}/{run}/{sample}/reports/{sample}_{pipeline}_report/report.html"
+    )
     print(file_path)
 
     # Check if the file exists
@@ -295,4 +391,3 @@ def serve_report(pipeline: str, run: str, sample: str):
         return FileResponse(file_path, media_type="text/html")
     else:
         return {"error": "File not found!"}
-

@@ -1,30 +1,41 @@
 # Data location
 data:
-  genecore_data_folder : "/g/korbel/STOCKS/Sequencing"
-  complete_data_folder : "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
-  data_folder : "/Users/tweber/Gits/belvedere/data"
-  json_data_backup : "data.json"
+  genecore_data_folder: "/g/korbel/STOCKS/Sequencing"
+  complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
+  data_folder: "/Users/tweber/Gits/belvedere/data"
+  # data_folder : "/g/korbel/WORKFLOW_RESULTS"
+  json_data_backup: "data.json"
   rabbitmq:
     exchange: status_exchange
     queue: my_queue
     routing_key: latest_status
 
-
-# Wf Status
+# panoptes configuration
 panoptes:
   url: "http://127.0.0.1:8058"
-  json_status_backup : "status.json"
+  json_status_backup: "status.json"
   rabbitmq:
     exchange: data
     queue: data_queue
     routing_key: latest_data
 
+# FastAPI configuration
 fastapi:
   host: "localhost"
   # host: "seneca.embl.de"
   port: 8059
 
+# Dash configuration
 dash:
   host: "localhost"
   # host: "seneca.embl.de"
   port: 8060
+
+# Snakemake configuration
+snakemake:
+  binary: "/Users/tweber/miniconda3/envs/snakemake_latest/bin"
+  # binary: "/Users/tweber/miniconda3/envs/snakemake_latest/bin"
+  repository_location: "/Users/tweber/Gits/snakemake_logs_dev"
+
+watchdog:
+  logs_folder: "/g/korbel2/weber/workspace/ashleys-qc-pipeline/watchdog/logs"

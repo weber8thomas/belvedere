@@ -11,13 +11,63 @@ Strand-Scape simplifies the process of utilizing MosaiCatcher by providing a str
 ## Running Strand-Scape (admin side)
 
 #TODO 
+### Setting Up the Environment
+#### Creating the Conda Environment:
 
-- Conda env (dash, rabbitmq, fastapi, pika, ...)
-- 1. rabbitmq-server
-- 2. publisher.py
-- 3. fastapi_consumer.py
-- 4. app.py
+First, you need to set up your Python environment. This ensures you have all the necessary dependencies.
 
+```bash
+conda create -f conda_env.yaml
+conda activate strandscape_env
+```
+
+This command creates a new Conda environment based on the specifications listed in the conda_env.yaml file. The environment will have packages such as dash, rabbitmq, fastapi, pika, and more.
+
+#### Configuring the Application:
+Update the paths and other necessary configurations in the config.yaml file to match your system's requirements. This file likely contains important settings like directories, URLs, and ports that the application will use.
+
+### Running the Services
+For the subsequent steps, consider using screen to run each command in a separate session. This allows the services to run simultaneously.
+
+#### Starting Panoptes:
+Monitor your system with the Panoptes command.
+
+```bash
+panoptes -v --port 8058
+```
+
+#### Launching RabbitMQ:
+RabbitMQ is a message broker, allowing different parts of your application to communicate asynchronously.
+
+```bash
+rabbitmq-server
+```
+
+#### Starting the Publisher:
+This script likely sends messages to a queue, to be consumed by other services.
+
+```bash
+python publisher.py
+```
+
+#### Running the FastAPI Backend:
+Start the backend service, which provides an API and potentially processes data.
+
+```bash
+python run.py
+```
+
+Note: This command triggers the fastapi_backend.py script.
+
+#### Launching the Dash App:
+Dash is a Python framework for building analytical web applications. No JavaScript required.
+
+```bash
+python app.py
+```
+
+### Future Plans
+In the future, we plan to simplify this setup using docker-compose. This will allow all services to be started with a single command, ensuring easier deployment and scalability. Keep an eye out for updates.
 
 ## Using Strand-Scape (user side)
 
