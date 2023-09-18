@@ -1,5 +1,7 @@
 # Data location
 data:
+  genecore_data_folder : "/g/korbel/STOCKS/Sequencing"
+  complete_data_folder : "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
   data_folder : "/Users/tweber/Gits/belvedere/data"
   json_data_backup : "data.json"
   rabbitmq:

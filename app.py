@@ -83,9 +83,10 @@ def fill_sample_wise_container(url):
         if selected_run and selected_sample:
             # Fetch and merge necessary data from files
             # TODO: bind to configuration file
+            data_folder = config["data"]["data_folder"]
             df = merge_labels_and_info(
-                f"data/{selected_run}/{selected_sample}/cell_selection/labels.tsv",
-                f"data/{selected_run}/{selected_sample}/counts/{selected_sample}.info_raw",
+                f"{data_folder}/{selected_run}/{selected_sample}/cell_selection/labels.tsv",
+                f"{data_folder}/{selected_run}/{selected_sample}/counts/{selected_sample}.info_raw",
             )
 
             # Create the offcanvas datatable using dash-ag-grid
@@ -181,12 +182,18 @@ def fill_sample_wise_container(url):
 
             # Load or set default settings/data for various components
             # TODO: move to config file
+            data_folder = config["data"]["data_folder"]
             belvedere_json_path = (
-                f"data/{selected_run}/{selected_sample}/config/belvedere.json"
+                f"{data_folder}/{selected_run}/{selected_sample}/config/belvedere.json"
             )
 
             if os.path.isfile(belvedere_json_path):
                 sample_json = json.load(open(belvedere_json_path))
+                if "stored-selectedRows" not in sample_json:
+                    print(df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)])
+                    sample_json["stored-selectedRows"] = df.loc[
+                        (df["prediction"] == 1) & (df["pass1"] == 1)
+                    ].to_dict("records")
             else:
                 sample_json = {
                     "stored-report-button-ashleys": 0,
@@ -1066,19 +1073,24 @@ def fill_metadata_container(url, n_clicks, progress_store):
         #         "mosaicatcher-pipeline"
         #     ]["id"]
 
-        index = "PE20"
-        genecore_filepath = f"/g/korbel/STOCKS/Sequencing/2023/{run}"
+        # index = "PE20"
+        year = run.split("-")[0]
+        genecore_data_folder = config["data"]["genecore_data_folder"]
+        complete_data_folder = config["data"]["complete_data_folder"]
+        data_folder = config["data"]["data_folder"]
+        genecore_filepath = f"{genecore_data_folder}/{year}/{run}"
         pipeline_processed_data_filepath = (
-            f"/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/{run}/{sample}"
+            f"{complete_data_folder}/{run}/{sample}"
         )
-        backup_processed_data_filepath = f"/g/korbel/WORKFLOW_RESULTS/{run}/{sample}"
+
+        backup_processed_data_filepath = f"{data_folder}/{year}/{run}/{sample}"
 
         metadata_dict = {
             "Sample name": sample,
             "Run name": run,
-            "Sequencing index": index,
+            # "Sequencing index": index,
             "Raw data location": genecore_filepath,
-            "Pipeline processed data location": pipeline_processed_data_filepath,
+            "Pipeline complete data location": pipeline_processed_data_filepath,
             "Backup processed data location": backup_processed_data_filepath,
         }
 
@@ -1086,8 +1098,8 @@ def fill_metadata_container(url, n_clicks, progress_store):
             [
                 dbc.Row(
                     [
-                        dbc.Col(dmc.Text(k, size="lg", weight=500), width=4),
-                        dbc.Col(dmc.Text(v, size="md"), width="auto"),
+                        dbc.Col(dmc.Text(k, size="md", weight=500), width=4),
+                        dbc.Col(dmc.Text(v, size="sm"), width="auto"),
                     ]
                 )
                 for k, v in metadata_dict.items()
@@ -1194,8 +1206,9 @@ def write_sample_state_to_json(
         }
 
         # print(data_to_save)
-        os.makedirs(f"data/{run}/{sample}/config", exist_ok=True)
-        with open(f"data/{run}/{sample}/config/belvedere.json", "w") as f:
+        data_folder = config["data"]["data_folder"]
+        os.makedirs(f"{data_folder}/{run}/{sample}/config", exist_ok=True)
+        with open(f"{data_folder}/{run}/{sample}/config/belvedere.json", "w") as f:
             print("Writing to json")
             json.dump(data_to_save, f)
         # with open(f"backup/{run}--{sample}.json", "w") as f:
