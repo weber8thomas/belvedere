@@ -183,17 +183,13 @@ def fill_sample_wise_container(url):
             # Load or set default settings/data for various components
             # TODO: move to config file
             data_folder = config["data"]["data_folder"]
-            belvedere_json_path = (
-                f"{data_folder}/{selected_run}/{selected_sample}/config/belvedere.json"
-            )
+            belvedere_json_path = f"{data_folder}/{selected_run}/{selected_sample}/config/strandscape.json"
 
             if os.path.isfile(belvedere_json_path):
                 sample_json = json.load(open(belvedere_json_path))
                 if "stored-selectedRows" not in sample_json:
                     print(df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)])
-                    sample_json["stored-selectedRows"] = df.loc[
-                        (df["prediction"] == 1) & (df["pass1"] == 1)
-                    ].to_dict("records")
+                    sample_json["stored-selectedRows"] = df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict("records")
             else:
                 sample_json = {
                     "stored-report-button-ashleys": 0,
@@ -201,9 +197,7 @@ def fill_sample_wise_container(url):
                         "n_clicks": 0,
                         "run_mosaicatcher_disabled": True,
                     },
-                    "stored-selectedRows": df.loc[
-                        (df["prediction"] == 1) & (df["pass1"] == 1)
-                    ].to_dict("records"),
+                    "stored-selectedRows": df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict("records"),
                     "stored-homepage-button": 0,
                     "stored-report-button-mosaicatcher": 0,
                     "stored-run-mosaicatcher-button": {"n_clicks": 0, "disabled": True},
@@ -472,9 +466,7 @@ def update_progress(url):
                 dmc.MultiSelect(
                     id="run-dropdown",
                     placeholder="Select a run",
-                    data=[
-                        {"label": run, "value": run} for run in sorted(tmp_data.keys())
-                    ],
+                    data=[{"label": run, "value": run} for run in sorted(tmp_data.keys())],
                     persistence=True,
                     persistence_type="session",
                     # radius="xl",
@@ -489,11 +481,7 @@ def update_progress(url):
             [
                 dmc.MultiSelect(
                     id="sample-dropdown",
-                    data=[
-                        {"label": sample, "value": sample}
-                        for run in sorted(tmp_data.keys())
-                        for sample in sorted(tmp_data[run])
-                    ],
+                    data=[{"label": sample, "value": sample} for run in sorted(tmp_data.keys()) for sample in sorted(tmp_data[run])],
                     placeholder="Select a sample",
                     persistence=True,
                     persistence_type="session",
@@ -562,9 +550,7 @@ def set_sample_options(selected_run):
         raise dash.exceptions.PreventUpdate
     tmp_data = fetch_data()
     sample_names = tmp_data[selected_run]
-    return [
-        {"label": sample_name, "value": sample_name} for sample_name in sample_names
-    ]
+    return [{"label": sample_name, "value": sample_name} for sample_name in sample_names]
 
 
 @app.callback(
@@ -611,52 +597,52 @@ def save_selected_rows_and_disable_redirect_button(
             raise dash.exceptions.PreventUpdate
         else:
             run, sample = url.split("/")[1:3]
-            processed_df_path = (
-                f"{root_folder}/{run}/{sample}/cell_selection/labels_belvedere.tsv"
-            )
-            # if os.path.isfile(processed_df_path):
-            #     return False, stored_save_button, stored_selected_rows
-            # else:
+            processed_df_path = f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            if os.path.isfile(processed_df_path):
+                return False, stored_save_button, stored_selected_rows
+            else:
+                # print(stored_save_button)
+                if n_clicks:
+                    print(n_clicks, stored_save_button["n_clicks"])
+                    if n_clicks > stored_save_button["n_clicks"]:
+                        # Convert records to DataFrame once
+                        processed_df = pd.DataFrame.from_records(df)
 
-            # print(stored_save_button)
-            if n_clicks:
-                print(n_clicks, stored_save_button["n_clicks"])
-                if n_clicks > stored_save_button["n_clicks"]:
-                    # Convert records to DataFrame once
-                    processed_df = pd.DataFrame.from_records(df)
+                        # Backup original 'prediction' and 'probability'
+                        for col in ["prediction", "probability"]:
+                            processed_df[f"{col}_bak"] = processed_df[col]
 
-                    # Backup original 'prediction' and 'probability'
-                    for col in ["prediction", "probability"]:
-                        processed_df[f"{col}_bak"] = processed_df[col]
+                        selected_cells = pd.DataFrame.from_records(selected_rows).cell.values.tolist()
 
-                    selected_cells = pd.DataFrame.from_records(
-                        selected_rows
-                    ).cell.values.tolist()
+                        # Set 'prediction' and 'probability' directly in processed_df based on condition
+                        processed_df.loc[
+                            processed_df.cell.isin(selected_cells),
+                            ["prediction", "probability"],
+                        ] = 1
+                        processed_df.loc[
+                            ~processed_df.cell.isin(selected_cells),
+                            ["prediction", "probability"],
+                        ] = 0
 
-                    # Set 'prediction' and 'probability' directly in processed_df based on condition
-                    processed_df.loc[
-                        processed_df.cell.isin(selected_cells),
-                        ["prediction", "probability"],
-                    ] = 1
-                    processed_df.loc[
-                        ~processed_df.cell.isin(selected_cells),
-                        ["prediction", "probability"],
-                    ] = 0
+                        # Sort and reset index
+                        processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
 
-                    # Sort and reset index
-                    processed_df = processed_df.sort_values(by="cell").reset_index(
-                        drop=True
-                    )
-
-                    processed_df.to_csv(processed_df_path, sep="\t", index=False)
-                    # print(processed_df)
-                    stored_save_button["run_mosaicatcher_disabled"] = False
-                    return (
-                        # stored_save_button["run_mosaicatcher_disabled"],
-                        stored_save_button,
-                        selected_rows,
-                        n_clicks_refresh,
-                    )
+                        processed_df.to_csv(processed_df_path, sep="\t", index=False)
+                        # print(processed_df)
+                        stored_save_button["run_mosaicatcher_disabled"] = False
+                        return (
+                            # stored_save_button["run_mosaicatcher_disabled"],
+                            stored_save_button,
+                            selected_rows,
+                            n_clicks_refresh,
+                        )
+                    else:
+                        return (
+                            # stored_save_button["run_mosaicatcher_disabled"],
+                            stored_save_button,
+                            stored_selected_rows,
+                            n_clicks_refresh,
+                        )
                 else:
                     return (
                         # stored_save_button["run_mosaicatcher_disabled"],
@@ -664,13 +650,6 @@ def save_selected_rows_and_disable_redirect_button(
                         stored_selected_rows,
                         n_clicks_refresh,
                     )
-            else:
-                return (
-                    # stored_save_button["run_mosaicatcher_disabled"],
-                    stored_save_button,
-                    stored_selected_rows,
-                    n_clicks_refresh,
-                )
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -740,10 +719,7 @@ def disable_report_button(progress_store, url):
     if url != "/":
         run, sample = url.split("/")[1:3]
         print(run, sample)
-        if (
-            progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
-            == "Done"
-        ):
+        if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] == "Done":
             return False, False
         else:
             return True, True
@@ -763,18 +739,13 @@ def disable_report_button(progress_store, url):
 )
 def disable_report_button(progress_store, url):
     if url != "/":
+        print("disable_report_button")
         run, sample = url.split("/")[1:3]
         print(run, sample)
-        if (
-            progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"]
-            == "Done"
-        ):
+        if progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"] == "Done":
             return False, True
         else:
-            if (
-                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
-                == "Done"
-            ):
+            if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] == "Done":
                 return True, False
             else:
                 return True, True
@@ -840,9 +811,7 @@ def generate_progress_bar(entry):
     Input("refresh-button", "n_clicks"),
     State("stored-refresh-button", "data"),
 )
-def update_progress(
-    data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks
-):
+def update_progress(data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks):
     print("UPDATE PROGRESS")
     print(n_clicks, stored_n_clicks)
     continue_update = False
@@ -865,9 +834,7 @@ def update_progress(
                 print(n_clicks, stored_n_clicks)
                 components = []
 
-                data_panoptes = collections.OrderedDict(
-                    sorted(data_panoptes_raw.items())
-                )
+                data_panoptes = collections.OrderedDict(sorted(data_panoptes_raw.items()))
 
                 # Generate progress bars
                 for entry in data_panoptes:
@@ -885,9 +852,7 @@ def update_progress(
                             "ashleys-qc-pipeline",
                             "mosaicatcher-pipeline",
                         ]:
-                            pipeline_progress[pipeline] = generate_progress_bar(
-                                data_panoptes[entry][pipeline]
-                            )
+                            pipeline_progress[pipeline] = generate_progress_bar(data_panoptes[entry][pipeline])
 
                         row = dbc.Row(
                             [
@@ -964,11 +929,7 @@ def update_progress(url, progress_store):
 
     tmp_data = fetch_data()
     data_lite = [f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v)]
-    data_panoptes_raw = [
-        wf
-        for wf in response_json["workflows"]
-        if "--".join(wf["name"].split("--")[1:]) in data_lite
-    ]
+    data_panoptes_raw = [wf for wf in response_json["workflows"] if "--".join(wf["name"].split("--")[1:]) in data_lite]
 
     data_panoptes = collections.defaultdict(dict)
     for wf in data_panoptes_raw:
@@ -999,9 +960,7 @@ def update_progress(url, progress_store):
     timestamp_data = response_json_complete[1]
 
     timestamp_data = dmc.Text(f"Last data update: {timestamp_data}", size="xs")
-    timestamp_progress = dmc.Text(
-        f"Last progress update: {timestamp_progress}", size="xs"
-    )
+    timestamp_progress = dmc.Text(f"Last progress update: {timestamp_progress}", size="xs")
     div_timestamps = html.Div([timestamp_data, timestamp_progress])
     return data_panoptes, div_timestamps
 
@@ -1018,9 +977,7 @@ def update_progress(url, progress_store):
         run, sample = url.split("/")[1:3]
 
         if progress_store != {}:
-            progress_bar = generate_progress_bar(
-                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]
-            )
+            progress_bar = generate_progress_bar(progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"])
 
         else:
             progress_bar = generate_progress_bar({"status": "not_started"})
@@ -1042,9 +999,7 @@ def update_progress(url, progress_store):
         # print("\n\n")
 
         if progress_store != {}:
-            progress_bar = generate_progress_bar(
-                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
-            )
+            progress_bar = generate_progress_bar(progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"])
 
         else:
             progress_bar = generate_progress_bar({"status": "not_started"})
@@ -1079,9 +1034,7 @@ def fill_metadata_container(url, n_clicks, progress_store):
         complete_data_folder = config["data"]["complete_data_folder"]
         data_folder = config["data"]["data_folder"]
         genecore_filepath = f"{genecore_data_folder}/{year}/{run}"
-        pipeline_processed_data_filepath = (
-            f"{complete_data_folder}/{run}/{sample}"
-        )
+        pipeline_processed_data_filepath = f"{complete_data_folder}/{run}/{sample}"
 
         backup_processed_data_filepath = f"{data_folder}/{year}/{run}/{sample}"
 
@@ -1208,7 +1161,7 @@ def write_sample_state_to_json(
         # print(data_to_save)
         data_folder = config["data"]["data_folder"]
         os.makedirs(f"{data_folder}/{run}/{sample}/config", exist_ok=True)
-        with open(f"{data_folder}/{run}/{sample}/config/belvedere.json", "w") as f:
+        with open(f"{data_folder}/{run}/{sample}/config/strandscape.json", "w") as f:
             print("Writing to json")
             json.dump(data_to_save, f)
         # with open(f"backup/{run}--{sample}.json", "w") as f:
@@ -1258,11 +1211,7 @@ def trigger_snakemake(
                 html.Div(
                     [
                         # html.Hr(),
-                        dmc.Center(
-                            dmc.Text(
-                                "Email not valid", color="red", weight=700, size="lg"
-                            )
-                        ),
+                        dmc.Center(dmc.Text("Email not valid", color="red", weight=700, size="lg")),
                     ]
                 ),
                 n,
@@ -1274,12 +1223,8 @@ def trigger_snakemake(
 
             snake_args = {
                 "email": email,
-                "multistep_normalisation_for_SV_calling": True
-                if sv_calling == "multistep_normalisation_for_SV_calling"
-                else False,
-                "hgsvc_based_normalized_counts": True
-                if sv_calling == "hgsvc_based_normalized_counts"
-                else False,
+                "multistep_normalisation_for_SV_calling": True if sv_calling == "multistep_normalisation_for_SV_calling" else False,
+                "hgsvc_based_normalized_counts": True if sv_calling == "hgsvc_based_normalized_counts" else False,
                 "blacklisting": blacklisting,
             }
 
@@ -1287,8 +1232,9 @@ def trigger_snakemake(
             FASTAPI_PORT = config["fastapi"]["port"]
 
             # Trigger the API endpoint
+            pipeline = "mosaicatcher-pipeline"
             response = requests.post(
-                f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/mosaicatcher-pipeline--{run}--{sample}",
+                f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/{pipeline}--{run}--{sample}",
                 json=snake_args,
             )
 
@@ -1296,9 +1242,7 @@ def trigger_snakemake(
             print(response.status_code)
             print(response.json())
             return (
-                html.Div(
-                    id={"type": "email-validation-message", "index": f"{run}--{sample}"}
-                ),
+                html.Div(id={"type": "email-validation-message", "index": f"{run}--{sample}"}),
                 n,
             )
             print("TRIGGERED", n)
@@ -1356,9 +1300,7 @@ def generate_form_element(selected_run, selected_sample):
                         [
                             dbc.Label(
                                 "Email",
-                                html_for={
-                                    "type": f"email-{selected_run}-{selected_sample}"
-                                },
+                                html_for={"type": f"email-{selected_run}-{selected_sample}"},
                                 width=2,
                             ),
                             dbc.Col(
@@ -1666,9 +1608,7 @@ def populate_container_sample(
         index = "PE20"
         genecore_filepath = f"/g/korbel/STOCKS/Sequencing/2023/{selected_run}"
         pipeline_processed_data_filepath = f"/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/{selected_run}/{selected_sample}"
-        backup_processed_data_filepath = (
-            f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
-        )
+        backup_processed_data_filepath = f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
 
         metadata_dict = {
             "Sample name": selected_sample,
@@ -1744,10 +1684,7 @@ def populate_container_sample(
             ]
         )
 
-        if (
-            n_clicks_homepage_button
-            and n_clicks_homepage_button > report_homepage_button_stored
-        ):
+        if n_clicks_homepage_button and n_clicks_homepage_button > report_homepage_button_stored:
             return (
                 homepage_layout,
                 n_clicks_homepage_button,
@@ -1758,10 +1695,7 @@ def populate_container_sample(
             )
 
         # Check which button was clicked last by comparing their timestamps
-        elif (
-            n_clicks_report_ashleys_button
-            and n_clicks_report_ashleys_button > report_ashleys_button_stored
-        ):
+        elif n_clicks_report_ashleys_button and n_clicks_report_ashleys_button > report_ashleys_button_stored:
             pipeline = "ashleys-qc-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
@@ -1779,16 +1713,11 @@ def populate_container_sample(
                 n_clicks_report_mosaicatcher_button,
             )
 
-        elif (
-            n_clicks_report_mosaicatcher_button
-            and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored
-        ):
+        elif n_clicks_report_mosaicatcher_button and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored:
             pipeline = "mosaicatcher-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
-            print(
-                f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
-            )
+            print(f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
             iframe = [
                 html.Iframe(
                     src=f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
@@ -1802,10 +1731,7 @@ def populate_container_sample(
                 n_clicks_beldevere_button,
                 n_clicks_report_mosaicatcher_button,
             )
-        elif (
-            n_clicks_beldevere_button
-            and n_clicks_beldevere_button > beldevere_button_stored
-        ):
+        elif n_clicks_beldevere_button and n_clicks_beldevere_button > beldevere_button_stored:
             form_element = generate_form_element(selected_run, selected_sample)
             print(form_element)
             x = len(selected_rows)
@@ -1892,15 +1818,13 @@ def populate_container_sample(
                                                     },
                                                     color="red",
                                                     variant="filled",
-                                                    disabled=False,
+                                                    disabled=True,
                                                     n_clicks=0,
                                                     className="mt-3",
                                                     style={"width": "auto"},
                                                     size="xl",
                                                     radius="xl",
-                                                    leftIcon=DashIconify(
-                                                        icon="zondicons:play-outline"
-                                                    ),
+                                                    leftIcon=DashIconify(icon="zondicons:play-outline"),
                                                 ),
                                             ]
                                         ),
@@ -2019,9 +1943,7 @@ sidebar = html.Div(
         ),
         dbc.Modal(
             [
-                dbc.ModalHeader(
-                    html.H1("Warning!", className="text-warning"), id="modal-header"
-                ),
+                dbc.ModalHeader(html.H1("Warning!", className="text-warning"), id="modal-header"),
                 dbc.ModalBody(
                     html.H5(id="modal-body", className="text-warning"),
                     # style={"background-color": "#F0FFF0"},

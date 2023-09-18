@@ -40,9 +40,7 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
         # Extract the timestamp from the header frame
         if header_frame.timestamp:
             timestamp = header_frame.timestamp
-            human_readable_timestamp = datetime.datetime.fromtimestamp(
-                timestamp / 1000.0
-            ).strftime("%Y-%m-%d %H:%M:%S")
+            human_readable_timestamp = datetime.datetime.fromtimestamp(timestamp / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
 
         else:
             timestamp = None
@@ -57,9 +55,7 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
             print("Loading from JSON file...")
             data_json = load_from_json(filename=json_backup_filename)
             file_timestamp = os.path.getmtime(json_backup_filename)
-            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime("%Y-%m-%d %H:%M:%S")
             return data_json, file_timestamp
         else:
             print("RabbitMQ queue NOT empty and message is NOT empty")
@@ -72,9 +68,7 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
             print("Loading from JSON file...")
             data_json = load_from_json(filename=json_backup_filename)
             file_timestamp = os.path.getmtime(json_backup_filename)
-            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
             return data_json, file_timestamp
         else:
@@ -117,20 +111,27 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         working_directory=".",
         report_location=".",
         pipeline=str,
+        sample_name=str,
+        publishdir_location=str,
     ):
         """Execute the command using dry-run to make sure the DAG is well computed"""
-        
 
         print("Running command: %s", " ".join(cmd + profile_dry_run + dry_run_options))
 
         # Complete environment
-        snakemake_binary_folder = "/".join(
-            config["snakemake"]["binary"].split("/")[:-1]
-        )
+        snakemake_binary_folder = "/".join(config["snakemake"]["binary"].split("/")[:-1])
         my_env = os.environ.copy()
         my_env["PATH"] = f"{snakemake_binary_folder}:{my_env['PATH']}"
 
+        stranscape_json = json.loads(open(f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json", "r"))
+        cell = stranscape_json["stored-selectedRows"][0]["cell"]
 
+        cmd = cmd[:-2] + [
+            f"{data_location}/{date_folder}/{sample_name}/debug/mosaicatcher_fastqc/{cell}_1_fastqc.html",
+            "--rerun-triggers",
+            "mtime",
+            "--force",
+        ]
 
         # Prepare process to perform dry run
         process = subprocess.Popen(
@@ -148,12 +149,13 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # Convert it to a string
         current_time = now.strftime("%Y%m%d%H%M%S")
 
-        # 
-        watchdog_logs_folder = config["watchdog"]["logs_folder"] 
+        #
+        watchdog_logs_folder = config["watchdog"]["logs_folder"]
         os.makedirs("watchdog/logs/per-run", exist_ok=True)
 
         with open(
-            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log", "w"
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log",
+            "w",
         ) as f:
             process = subprocess.Popen(
                 cmd + profile_slurm + wms_monitor_args,
@@ -217,7 +219,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
             "/g/korbel2/weber/workspace/mosaicatcher-update/workflow/report/custom-stylesheet.css",
         ]
 
-        watchdog_logs_folder = config["watchdog"]["logs_folder"] 
+        watchdog_logs_folder = config["watchdog"]["logs_folder"]
 
         # Get the current date and time
         now = datetime.datetime.now()
@@ -226,7 +228,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         current_time = now.strftime("%Y%m%d%H%M%S")
 
         with open(
-            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log", "w"
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log",
+            "w",
         ) as f:
             process2 = subprocess.Popen(
                 # cmd,
@@ -244,17 +247,15 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         logging.info("Generating ashleys report.")
         os.makedirs(os.path.dirname(report_location), exist_ok=True)
 
-
         # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
-        logging.info(
-            "Running command: %s", " ".join(cmd + profile_slurm + report_options)
-        )
+        logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
 
         # Change the permissions of the new directory
         # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
 
         with open(
-            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log", "w"
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
+            "w",
         ) as f:
             print(cmd + profile_slurm + report_options)
             process2 = subprocess.Popen(
@@ -288,7 +289,6 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # Change the permissions of the new directory
         subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
 
-
     ############
     # START
     ############
@@ -315,35 +315,38 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # f"genecore_prefix={genecore_prefix}",
         # f"genecore_date_folder={date_folder}",
         # f"genecore_regex_element={prefix}",
-        f'samples_to_process=["{sample_name}"]',
+        f'samples_to_process="[{sample_name}]"',
         "multistep_normalisation=True",
         "MultiQC=True",
         "split_qc_plot=False",
+        "ashleys_pipeline=True",
         f"publishdir={publishdir_location}",
         "email=thomas.weber@embl.de",
         f"data_location={data_location}",
         "--nolock",
+        "--rerun-triggers",
+        "mtime",
     ]
 
     # Debug
 
-    cmd = [
-        f"{snakemake_binary}",
-        "--nolock",
-        # "--rerun-triggers mtime",
-        "--forceall",
-        "--cores",
-        "1",
-        "--config",
-        # "blacklisting=False",
-        # "split_qc_plot=False",
-        # # f"publishdir={publishdir_location}",
-        # # "email=thomas.weber@embl.de",
-        # f"data_location={data_location}",
-        # f'samples_to_process="[{sample_name}]"',
-    ]
+    # cmd = [
+    #     f"{snakemake_binary}",
+    #     "--nolock",
+    #     # "--rerun-triggers mtime",
+    #     "--forceall",
+    #     "--cores",
+    #     "1",
+    #     "--config",
+    #     # "blacklisting=False",
+    #     # "split_qc_plot=False",
+    #     # # f"publishdir={publishdir_location}",
+    #     # # "email=thomas.weber@embl.de",
+    #     # f"data_location={data_location}",
+    #     # f'samples_to_process="[{sample_name}]"',
+    # ]
 
-    # Panoptes 
+    # Panoptes
 
     wms_monitor_args = [
         "--wms-monitor",
@@ -351,7 +354,6 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         "--wms-monitor-arg",
         f"{wms_monitor_renaming_option}",
     ]
-
 
     # Append the snake_args to cmd
     snake_args_list = list()
@@ -375,15 +377,15 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         report_location=report_location,
         # working_directory="/Users/tweber/Gits/snakemake_logs_dev",
         pipeline=pipeline,
+        sample_name=sample_name,
+        publishdir_location=publishdir_location,
     )
 
 
 @app.get("/reports/{run}--{sample}/{pipeline}/report.html")
 def serve_report(pipeline: str, run: str, sample: str):
     data_folder = config["data"]["data_folder"]
-    file_path = (
-        f"{data_folder}/{run}/{sample}/reports/{sample}_{pipeline}_report/report.html"
-    )
+    file_path = f"{data_folder}/{run}/{sample}/reports/{sample}_{pipeline}_report/report.html"
     print(file_path)
 
     # Check if the file exists

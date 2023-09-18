@@ -12,10 +12,9 @@ from config import load_config
 config = load_config()
 
 
-
 def fetch_data_from_api():
     # PANOPTES_API = "http://127.0.0.1:8058"
-    PANOPTES_API = config["panoptes"]
+    PANOPTES_API = config["panoptes"]["url"]
     url_api = f"{PANOPTES_API}/api/workflows"
     max_retries = 5
     wait_time = 10
@@ -96,11 +95,7 @@ def save_to_json(data=dict, filename=str):
 
 
 if __name__ == "__main__":
-
-
     while True:
-
-        
         # Wf progress status - Panoptes
         data = fetch_data_from_api()
         if data != {}:
@@ -111,7 +106,6 @@ if __name__ == "__main__":
             queue=config["panoptes"]["rabbitmq"]["queue"],
             routing_key=config["panoptes"]["rabbitmq"]["routing_key"],
         )
-
 
         # Data structure
         data_dict = get_files_structure(config["data"]["data_folder"])
@@ -126,4 +120,4 @@ if __name__ == "__main__":
         )
 
         # Fetch every 30 seconds
-        time.sleep(30)  
+        time.sleep(30)
