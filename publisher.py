@@ -1,6 +1,7 @@
 import collections
 import datetime
 import os
+import re
 import sys
 import pika
 import time
@@ -49,9 +50,15 @@ def get_files_structure(root_folder):
     data_dict = collections.defaultdict(list)
     for run_name_folder in os.listdir(root_folder):
         run_name = run_name_folder
-        for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
-            sample_name = sample_folder
-            data_dict[run_name].append(sample_name)
+        pattern = "(?:20[1-3][0-9])-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])-.*"
+        # Find all matches
+        matches = re.findall(pattern, run_name)
+        print(run_name, matches)
+        if matches:
+            print("OK")
+            for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
+                sample_name = sample_folder
+                data_dict[run_name].append(sample_name)
 
     return data_dict
 
@@ -97,7 +104,9 @@ if __name__ == "__main__":
         # Wf progress status - Panoptes
         data = fetch_data_from_api()
         if data != {}:
+            print(config["panoptes"]["json_status_backup"])
             save_to_json(data=data, filename=config["panoptes"]["json_status_backup"])
+
         publish_to_rabbitmq(
             data=data,
             exchange=config["panoptes"]["rabbitmq"]["exchange"],
@@ -108,6 +117,7 @@ if __name__ == "__main__":
         # Data structure
         data_dict = get_files_structure(config["data"]["data_folder"])
         if data_dict != {}:
+            print(config["data"]["json_data_backup"])
             save_to_json(data=data_dict, filename=config["data"]["json_data_backup"])
 
         publish_to_rabbitmq(

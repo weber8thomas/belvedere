@@ -1,4 +1,5 @@
 # IMPORTS
+import threading
 import collections
 import datetime
 import json
@@ -45,6 +46,20 @@ config = load_config("config.yaml")
 root_folder = os.path.expanduser(config["data"]["data_folder"])
 
 # data = get_files_structure(root_folder)
+
+
+def trigger_snakemake_api(pipeline, run, sample, snake_args):
+    FASTAPI_HOST = config["fastapi"]["host"]
+    FASTAPI_PORT = config["fastapi"]["port"]
+
+    response = requests.post(
+        f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/{pipeline}--{run}--{sample}",
+        json=snake_args,
+    )
+
+    # Check the response
+    print(response.status_code)
+    print(response.json())
 
 
 # Fetching the file structure based on the root folder
@@ -213,7 +228,7 @@ def fill_sample_wise_container(url):
                         },
                         data=0,
                         # data=sample_json["stored-refresh-button-samplewise"],
-                        storage_type="memory",
+                        storage_type="session",
                     ),
                     dcc.Store(
                         id={
@@ -222,14 +237,14 @@ def fill_sample_wise_container(url):
                         },
                         data=0,
                         # data=sample_json["stored-refresh-button-samplewise"],
-                        storage_type="memory",
+                        storage_type="session",
                     ),
                     dcc.Store(
                         {
                             "type": "stored-report-button-ashleys",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data=0,
                         data=sample_json["stored-report-button-ashleys"],
                     ),
@@ -238,7 +253,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-save-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
                         data=sample_json["stored-save-button"],
                     ),
@@ -247,7 +262,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-selectedRows",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data=df.loc[
                         #     (df["prediction"] == 1) & (df["pass1"] == 1)
                         # ].to_dict("records"),
@@ -258,7 +273,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-homepage-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data=0,
                         data=sample_json["stored-homepage-button"],
                     ),
@@ -267,7 +282,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-report-button-mosaicatcher",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data=0,
                         data=sample_json["stored-report-button-mosaicatcher"],
                     ),
@@ -276,7 +291,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-run-mosaicatcher-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="memory",
+                        storage_type="session",
                         # data={"n_clicks": 0, "disabled": True},
                         data=sample_json["stored-run-mosaicatcher-button"],
                     ),
@@ -437,7 +452,7 @@ def update_progress(url):
                     dcc.Store(
                         id="stored-refresh-button",
                         data=0,
-                        storage_type="memory",
+                        storage_type="session",
                     ),
                     dbc.Col(
                         dcc.Link(
@@ -604,52 +619,47 @@ def save_selected_rows_and_disable_redirect_button(
             print(processed_df_path)
             print(processed_df_path_scratch)
             print(stored_save_button, stored_selected_rows, n_clicks_refresh)
-            if os.path.isfile(processed_df_path):
-                return stored_save_button, stored_selected_rows, n_clicks_refresh
-            else:
-                # print(stored_save_button)
-                if n_clicks:
-                    print(n_clicks, stored_save_button["n_clicks"])
-                    if n_clicks > stored_save_button["n_clicks"]:
-                        # Convert records to DataFrame once
-                        processed_df = pd.DataFrame.from_records(df)
+            # if os.path.isfile(processed_df_path):
+            #     return stored_save_button, stored_selected_rows, n_clicks_refresh
+            # else:
+            # print(stored_save_button)
+            if n_clicks:
+                print(n_clicks, stored_save_button["n_clicks"])
+                if n_clicks > stored_save_button["n_clicks"]:
+                    # Convert records to DataFrame once
+                    processed_df = pd.DataFrame.from_records(df)
 
-                        # Backup original 'prediction' and 'probability'
-                        for col in ["prediction", "probability"]:
-                            processed_df[f"{col}_bak"] = processed_df[col]
+                    # Backup original 'prediction' and 'probability'
+                    for col in ["prediction", "probability"]:
+                        processed_df[f"{col}_bak"] = processed_df[col]
 
-                        selected_cells = pd.DataFrame.from_records(selected_rows).cell.values.tolist()
+                    selected_cells = pd.DataFrame.from_records(selected_rows).cell.values.tolist()
 
-                        # Set 'prediction' and 'probability' directly in processed_df based on condition
-                        processed_df.loc[
-                            processed_df.cell.isin(selected_cells),
-                            ["prediction", "probability"],
-                        ] = 1
-                        processed_df.loc[
-                            ~processed_df.cell.isin(selected_cells),
-                            ["prediction", "probability"],
-                        ] = 0
+                    # Set 'prediction' and 'probability' directly in processed_df based on condition
+                    processed_df.loc[
+                        processed_df.cell.isin(selected_cells),
+                        ["prediction", "probability"],
+                    ] = 1
+                    processed_df.loc[
+                        ~processed_df.cell.isin(selected_cells),
+                        ["prediction", "probability"],
+                    ] = 0
 
-                        # Sort and reset index
-                        processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
+                    # Sort and reset index
+                    processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
 
-                        processed_df.to_csv(processed_df_path, sep="\t", index=False)
-                        processed_df.to_csv(processed_df_path_scratch, sep="\t", index=False)
-                        # print(processed_df)
-                        stored_save_button["run_mosaicatcher_disabled"] = False
-                        return (
-                            # stored_save_button["run_mosaicatcher_disabled"],
-                            stored_save_button,
-                            selected_rows,
-                            n_clicks_refresh,
-                        )
-                    else:
-                        return (
-                            # stored_save_button["run_mosaicatcher_disabled"],
-                            stored_save_button,
-                            stored_selected_rows,
-                            n_clicks_refresh,
-                        )
+                    processed_df.to_csv(processed_df_path, sep="\t", index=False)
+                    processed_df.to_csv(processed_df_path_scratch, sep="\t", index=False)
+                    # print(processed_df)
+                    stored_save_button["run_mosaicatcher_disabled"] = False
+                    print("save_selected_rows_and_disable_redirect_button")
+                    print(stored_save_button)
+                    return (
+                        # stored_save_button["run_mosaicatcher_disabled"],
+                        stored_save_button,
+                        selected_rows,
+                        n_clicks_refresh,
+                    )
                 else:
                     return (
                         # stored_save_button["run_mosaicatcher_disabled"],
@@ -657,6 +667,13 @@ def save_selected_rows_and_disable_redirect_button(
                         stored_selected_rows,
                         n_clicks_refresh,
                     )
+            else:
+                return (
+                    # stored_save_button["run_mosaicatcher_disabled"],
+                    stored_save_button,
+                    stored_selected_rows,
+                    n_clicks_refresh,
+                )
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -742,19 +759,24 @@ def disable_report_button(progress_store, url):
         Output({"type": "run-mosaicatcher-button", "index": MATCH}, "disabled"),
     ],
     [
-        Input("stored-progress", "data"),
         Input("url", "pathname"),
+        Input("stored-progress", "data"),
+    ],
+    [
+        State({"type": "stored-save-button", "index": MATCH}, "data"),
     ],
 )
-def disable_report_button(progress_store, url):
+def disable_report_button(url, progress_store, store_save_button):
     if url != "/":
         run, sample = url.split("/")[1:3]
-        print(run, sample)
+        print("disable_report_button")
+        print(run, sample, progress_store[f"{run}--{sample}"])
+        print(store_save_button)
         if progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"] == "Done":
             return False, True
         else:
             if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] == "Done":
-                return True, False
+                return True, store_save_button["run_mosaicatcher_disabled"]
             else:
                 return True, True
     else:
@@ -1237,23 +1259,24 @@ def trigger_snakemake(
             }
             snake_args["multistep_normalisation"] = True
 
-            FASTAPI_HOST = config["fastapi"]["host"]
-            FASTAPI_PORT = config["fastapi"]["port"]
-
             # Trigger the API endpoint
             pipeline = "mosaicatcher-pipeline"
-            response = requests.post(
-                f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/{pipeline}--{run}--{sample}",
-                json=snake_args,
-            )
 
-            # Check the response
-            print(response.status_code)
-            print(response.json())
-            return (
-                html.Div(id={"type": "email-validation-message", "index": f"{run}--{sample}"}),
-                n,
-            )
+            # Define the arguments you want to pass
+            args = (pipeline, run, sample, snake_args)
+
+            thread = threading.Thread(target=trigger_snakemake_api, args=args)
+            thread.start()
+
+            # response = requests.post(
+            #     f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/trigger-snakemake/{pipeline}--{run}--{sample}",
+            #     json=snake_args,
+            # )
+
+            # return (
+            #     html.Div(id={"type": "email-validation-message", "index": f"{run}--{sample}"}),
+            #     n,
+            # )
             print("TRIGGERED", n)
             return (
                 dbc.Modal(
@@ -1722,14 +1745,14 @@ def populate_container_sample(
                 n_clicks_report_mosaicatcher_button,
             )
 
-        elif n_clicks_report_mosaicatcher_button and n_clicks_report_mosaicatcher_button > report_ashleys_button_stored:
+        elif n_clicks_report_mosaicatcher_button and n_clicks_report_mosaicatcher_button > report_mosaicatcher_button_stored:
             pipeline = "mosaicatcher-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
-            print(f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
+            print(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
             iframe = [
                 html.Iframe(
-                    src=f"{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
+                    src=f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
                     style={"width": "100%", "height": "900px"},
                 )
             ]
@@ -1978,7 +2001,7 @@ general_backend_components = html.Div(
     [
         dcc.Store(
             id="stored-progress",
-            storage_type="memory",
+            storage_type="session",
             data={},
         ),
         # dcc.Interval(id="interval", interval=20000, n_intervals=0),

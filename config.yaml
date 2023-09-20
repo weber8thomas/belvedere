@@ -5,7 +5,7 @@ data:
   # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
   # data_folder: "/Users/tweber/Gits/belvedere/data"
   data_folder: "/g/korbel/weber/TMP/WORKFLOW_RESULTS_DEV"
-  json_data_backup: "data.json"
+  json_data_backup: "/g/korbel/weber/TMP/data_dev.json"
   rabbitmq:
     exchange: status_exchange
     queue: my_queue
@@ -14,7 +14,7 @@ data:
 # panoptes configuration
 panoptes:
   url: "http://127.0.0.1:8058"
-  json_status_backup: "status.json"
+  json_status_backup: "/g/korbel/weber/TMP/status_dev.json"
   rabbitmq:
     exchange: data
     queue: data_queue

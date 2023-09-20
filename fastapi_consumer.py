@@ -129,7 +129,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
         cmd = cmd[:-2] + [
             "--force",
-            f"{data_location}/{date_folder}/{sample_name}/debug/mosaicatcher_fastqc/{cell}_1_fastqc.html",
+            f"{data_location}/{date_folder}/{sample_name}/debug/mosaicatcher_fastqc/{cell}.1_fastqc.html",
             "--rerun-triggers",
             "mtime",
         ]
@@ -190,7 +190,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
             if str(process.returncode) == str(0):
                 # self.run_second_command(cmd, profile_slurm, data_location, date_folder)
                 run_second_command(
-                    cmd + wms_monitor_args,
+                    cmd,
+                    wms_monitor_args,
                     profile_slurm,
                     profile_dry_run,
                     data_location,
@@ -205,6 +206,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
     def run_second_command(
         cmd,
+        wms_monitor_args,
         profile_slurm,
         profile_dry_run,
         data_location,
@@ -244,7 +246,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         ) as f:
             process2 = subprocess.Popen(
                 # cmd,
-                cmd + profile_slurm,
+                cmd + wms_monitor_args + profile_slurm,
                 stdout=f,
                 stderr=f,
                 universal_newlines=True,
@@ -256,6 +258,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
             print("Return code: %s", process2.returncode)
 
         logging.info("Generating ashleys report.")
+        print(report_location)
+        print(os.path.dirname(report_location))
         os.makedirs(os.path.dirname(report_location), exist_ok=True)
 
         # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
@@ -263,6 +267,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
         # Change the permissions of the new directory
         # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
+
+        print("Running command: %s", " ".join(cmd + profile_slurm + report_options))
 
         with open(
             f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
@@ -274,6 +280,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
                 stdout=f,
                 stderr=f,
                 universal_newlines=True,
+                cwd=working_directory,  # Change working directory
+                env=my_env,
             )
             # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
             process2.wait()
@@ -310,7 +318,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     publishdir_location = config["data"]["data_folder"]
     profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/dev/slurm_legacy_conda/"]
     # profile_slurm = ["--profile", "workflow/snakemake_profiles/HPC/slurm_EMBL/"]
-    profile_dry_run = ["--profile", "workflow/snakemake_profiles/local/conda/"]
+    profile_dry_run = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/local/conda/"]
     dry_run_options = ["-c", "1", "-n", "-q"]
     snakemake_binary = config["snakemake"]["binary"]
     # snakemake_binary = "/Users/tweber/miniconda3/envs/snakemake_latest/bin/snakemake"
@@ -319,7 +327,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     run_name = f"{run_id}".split("--")[1]
     sample_name = f"{run_id}".split("--")[2]
     pipeline = "mosaicatcher-pipeline"
-    report_location = f"{publishdir_location}/{sample_name}/reports/{sample_name}_{pipeline}_report.zip"
+    report_location = f"{publishdir_location}/{run_name}/{sample_name}/reports/{sample_name}_{pipeline}_report.zip"
 
     cmd = [
         f"{snakemake_binary}",
