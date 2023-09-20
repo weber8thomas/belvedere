@@ -71,9 +71,7 @@ def publish_to_rabbitmq(data=dict, exchange=str, queue=str, routing_key=str):
     channel.queue_bind(exchange=exchange, queue=queue, routing_key=routing_key)
 
     # Fetch the current timestamp
-    current_timestamp = int(
-        datetime.datetime.now().timestamp() * 1000
-    )  # Current time in milliseconds
+    current_timestamp = int(datetime.datetime.now().timestamp() * 1000)  # Current time in milliseconds
 
     # Publish the message to the exchange with the 'latest_status' routing key
     channel.basic_publish(

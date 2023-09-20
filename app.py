@@ -229,7 +229,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-report-button-ashleys",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data=0,
                         data=sample_json["stored-report-button-ashleys"],
                     ),
@@ -238,7 +238,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-save-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
                         data=sample_json["stored-save-button"],
                     ),
@@ -247,7 +247,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-selectedRows",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data=df.loc[
                         #     (df["prediction"] == 1) & (df["pass1"] == 1)
                         # ].to_dict("records"),
@@ -258,7 +258,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-homepage-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data=0,
                         data=sample_json["stored-homepage-button"],
                     ),
@@ -267,7 +267,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-report-button-mosaicatcher",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data=0,
                         data=sample_json["stored-report-button-mosaicatcher"],
                     ),
@@ -276,7 +276,7 @@ def fill_sample_wise_container(url):
                             "type": "stored-run-mosaicatcher-button",
                             "index": f"{selected_run}--{selected_sample}",
                         },
-                        storage_type="session",
+                        storage_type="memory",
                         # data={"n_clicks": 0, "disabled": True},
                         data=sample_json["stored-run-mosaicatcher-button"],
                     ),
@@ -598,8 +598,14 @@ def save_selected_rows_and_disable_redirect_button(
         else:
             run, sample = url.split("/")[1:3]
             processed_df_path = f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            complete_data_folder = config["data"]["complete_data_folder"]
+            processed_df_path_scratch = f"{complete_data_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            os.makedirs(os.path.dirname(processed_df_path_scratch), exist_ok=True)
+            print(processed_df_path)
+            print(processed_df_path_scratch)
+            print(stored_save_button, stored_selected_rows, n_clicks_refresh)
             if os.path.isfile(processed_df_path):
-                return False, stored_save_button, stored_selected_rows
+                return stored_save_button, stored_selected_rows, n_clicks_refresh
             else:
                 # print(stored_save_button)
                 if n_clicks:
@@ -628,6 +634,7 @@ def save_selected_rows_and_disable_redirect_button(
                         processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
 
                         processed_df.to_csv(processed_df_path, sep="\t", index=False)
+                        processed_df.to_csv(processed_df_path_scratch, sep="\t", index=False)
                         # print(processed_df)
                         stored_save_button["run_mosaicatcher_disabled"] = False
                         return (
@@ -701,6 +708,8 @@ def toggle_success_modal_dashboard(n_save, n_close, is_open):
 )
 def toggle_offcanvas(n, is_open, stored_selected_rows):
     if n:
+        print("toggle_offcanvas")
+        print(stored_selected_rows)
         return not is_open, stored_selected_rows
     return is_open, stored_selected_rows
 
@@ -739,7 +748,6 @@ def disable_report_button(progress_store, url):
 )
 def disable_report_button(progress_store, url):
     if url != "/":
-        print("disable_report_button")
         run, sample = url.split("/")[1:3]
         print(run, sample)
         if progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"] == "Done":
@@ -1092,7 +1100,7 @@ def fill_metadata_container(url, n_clicks, progress_store):
             #     )
             # ]
         )
-        print(card)
+        # print(card)
 
         return card
 
@@ -1227,6 +1235,7 @@ def trigger_snakemake(
                 "hgsvc_based_normalized_counts": True if sv_calling == "hgsvc_based_normalized_counts" else False,
                 "blacklisting": blacklisting,
             }
+            snake_args["multistep_normalisation"] = True
 
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
@@ -1818,7 +1827,7 @@ def populate_container_sample(
                                                     },
                                                     color="red",
                                                     variant="filled",
-                                                    disabled=True,
+                                                    disabled=False,
                                                     n_clicks=0,
                                                     className="mt-3",
                                                     style={"width": "auto"},
