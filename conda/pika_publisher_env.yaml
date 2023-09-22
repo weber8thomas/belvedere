@@ -1,0 +1,10 @@
+name: pika_publisher_env
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - pika
+  - pyyaml
+  - httpx
+  # Check if rabbitmq available
+  - curl

@@ -6,12 +6,9 @@ from fastapi import Body, FastAPI
 from fastapi.responses import FileResponse
 import pika
 import json
-import uvicorn
 from config import load_config
-import os, sys
+import os
 import yaml
-
-
 config = load_config()
 
 app = FastAPI()
@@ -30,7 +27,7 @@ def load_from_json(filename: str):
 
 
 def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
     channel = connection.channel()
 
     # Fetch the message without auto acknowledgment

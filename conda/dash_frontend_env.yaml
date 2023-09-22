@@ -1,0 +1,16 @@
+name: dash_frontend_env
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - dash
+  - dash-bootstrap-components
+  - pandas
+  - requests
+  - pyyaml
+  - pip
+  - dash-auth
+  - pip:
+      - dash-iconify
+      - dash-ag-grid
+      - dash-mantine-components

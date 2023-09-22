@@ -2,14 +2,12 @@ import collections
 import datetime
 import os
 import re
-import sys
 import pika
 import time
 import httpx
 import json
-import yaml
 from config import load_config
-
+import yaml
 config = load_config()
 
 
@@ -64,7 +62,7 @@ def get_files_structure(root_folder):
 
 
 def publish_to_rabbitmq(data=dict, exchange=str, queue=str, routing_key=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
     channel = connection.channel()
 
     # Declare a topic exchange

@@ -1,0 +1,9 @@
+name: fastapi_backend_env
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - pika
+  - fastapi
+  - pyyaml
+  - uvicorn

@@ -1,0 +1,60 @@
+version: '3'
+
+services:
+
+  panoptes:
+    image: quay.io/biocontainers/panoptes-ui:0.2.3--pyh7cba7a3_0
+    command: ["panoptes", "-v", "--port", "8058"]
+    ports:
+      - "8058:8058"
+    volumes:
+      - "./:./"
+      # - "/g/korbel/weber/TMP/status_dev.json:/g/korbel/weber/TMP/status_dev.json"
+  
+  rabbitmq:
+    image: rabbitmq:management
+    command: ["rabbitmq-server"]
+    ports:
+      - "15672:15672"  # Port for RabbitMQ management UI
+      - "5672:5672"    # Default RabbitMQ broker port
+
+  pika-publisher:
+    build: 
+      context: .
+      dockerfile: docker_recipes/Dockerfile_pika_publisher.dockerfile
+    # command: ["bash", "-c", "sleep 10 && /opt/conda/bin/python /tmp/publisher.py"]
+    depends_on:
+      - rabbitmq
+      - panoptes
+    volumes:
+      - "./:/tmp"
+      - "./data/:/data"
+    
+
+  fastapi-backend:
+    build: 
+      context: .
+      dockerfile: docker_recipes/Dockerfile_fastapi_backend.dockerfile
+    # command: ["/opt/conda/bin/python", "run.py"]
+    ports:
+      - "8059:8059"
+    depends_on:
+      - pika-publisher
+      - rabbitmq
+    volumes:
+      - "./:/tmp"
+
+  dash-frontend:
+    build: 
+      context: .
+      dockerfile: docker_recipes/Dockerfile_dash_frontend.dockerfile
+    # command: ["python", "app.py"]
+    ports:
+      - "8060:8060"
+    depends_on:
+      - fastapi-backend
+    volumes:
+      - "./:/tmp"
+
+volumes:
+  data:
