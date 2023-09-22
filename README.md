@@ -1,7 +1,7 @@
 
-# Strand-Scape v0.1.0 Documentation
+# Strand-Scape v0.2.0 Documentation
 
-Welcome to Strand-Scape v0.1.0, an intuitive web platform designed to enhance the user experience for MosaiCatcher via a graphical interface.
+Welcome to Strand-Scape v0.2.0, an intuitive web platform designed to enhance the user experience for MosaiCatcher via a graphical interface.
 
 ## Introduction
 
@@ -11,6 +11,7 @@ Strand-Scape simplifies the process of utilizing MosaiCatcher by providing a str
 ## Running Strand-Scape (admin side)
 
 #TODO 
+
 ### Setting Up the Environment
 #### Creating the Conda Environment:
 
@@ -124,3 +125,28 @@ The backend infrastructure includes:
 - Once a sample is processed by a user, it cannot be reprocessed by another user. Enhancements in future versions will address this limitation.
 
 ---
+
+
+# Structure summary
+
+- Panoptes: biocontainer
+  - Snakemake API monitoring: https://github.com/panoptes-organization/panoptes
+  - Container: https://quay.io/repository/biocontainers/panoptes-ui?tab=tags&tag=latest
+- Publisher: 
+  - Python script based on pika (publish to rabbitmq)
+  - Container: docker_recipes/Dockerfile_publisher.dockerfile
+- Watcher (python): 
+  - Python script that monitors every hour a folder and trigger snakemake through a subprocess if a new folder is detected
+  - **Note: This one is optional and could still run independtly in a screen on seneca if needed**
+  - Container: docker_recipes/Dockerfile_watcher.dockerfile
+- RabbitMQ: 
+  - RabbitMQ broker: https://github.com/rabbitmq/rabbitmq-server
+  - Container: https://registry.hub.docker.com/_/rabbitmq/
+  - K8S docs: https://rabbitmq.com/kubernetes/operator/operator-overview.html
+- fastapi_backend:
+  - Python fastapi backend that consume rabbitmq messages, serve HTML files and trigger snakemake
+  - **Note: Running on K8S/Docker, would it be possible to still trigger a pipeline through my username that fire jobs on slurm?**
+  - Container: docker_recipes/Dockerfile_fastapi_backend.dockerfile
+- dash_frontend (python): 
+  - Python dash frontend that generates the web UI
+  - Container: docker_recipes/Dockerfile_dash_frontend.dockerfile
