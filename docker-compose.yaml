@@ -9,7 +9,6 @@ services:
       - "8058:8058"
     volumes:
       - "./:./"
-      # - "/g/korbel/weber/TMP/status_dev.json:/g/korbel/weber/TMP/status_dev.json"
   
   rabbitmq:
     image: rabbitmq:management
@@ -22,7 +21,6 @@ services:
     build: 
       context: .
       dockerfile: docker_recipes/Dockerfile_pika_publisher.dockerfile
-    # command: ["bash", "-c", "sleep 10 && /opt/conda/bin/python /tmp/publisher.py"]
     depends_on:
       - rabbitmq
       - panoptes
@@ -35,7 +33,6 @@ services:
     build: 
       context: .
       dockerfile: docker_recipes/Dockerfile_fastapi_backend.dockerfile
-    # command: ["/opt/conda/bin/python", "run.py"]
     ports:
       - "8059:8059"
     depends_on:
@@ -48,7 +45,6 @@ services:
     build: 
       context: .
       dockerfile: docker_recipes/Dockerfile_dash_frontend.dockerfile
-    # command: ["python", "app.py"]
     ports:
       - "8060:8060"
     depends_on:
