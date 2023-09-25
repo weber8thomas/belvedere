@@ -14,8 +14,8 @@ services:
     image: rabbitmq:management
     command: ["rabbitmq-server"]
     ports:
-      - "15672:15672"  # Port for RabbitMQ management UI
-      - "5672:5672"    # Default RabbitMQ broker port
+      - "15672:15672"
+      - "5672:5672"
 
   pika-publisher:
     build: 
