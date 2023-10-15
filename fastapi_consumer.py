@@ -201,6 +201,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
             else:
                 print("\nThe output is not as expected.")
 
+
     def run_second_command(
         cmd,
         wms_monitor_args,
