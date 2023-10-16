@@ -1066,7 +1066,7 @@ def fill_metadata_container(url, n_clicks, progress_store):
         genecore_filepath = f"{genecore_data_folder}/{year}/{run}"
         pipeline_processed_data_filepath = f"{complete_data_folder}/{run}/{sample}"
 
-        backup_processed_data_filepath = f"{data_folder}/{year}/{run}/{sample}"
+        backup_processed_data_filepath = f"{data_folder}/{run}/{sample}"
 
         metadata_dict = {
             "Sample name": sample,
@@ -1638,7 +1638,7 @@ def populate_container_sample(
         )
 
         index = "PE20"
-        genecore_filepath = f"/g/korbel/STOCKS/Sequencing/2023/{selected_run}"
+        genecore_filepath = f"/g/korbel/STOCKS/Data/Assay/sequencing/2023/{selected_run}"
         pipeline_processed_data_filepath = f"/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/{selected_run}/{selected_sample}"
         backup_processed_data_filepath = f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
 

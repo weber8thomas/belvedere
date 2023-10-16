@@ -1,11 +1,13 @@
 # Data location
 data:
-  genecore_data_folder: "./g/korbel/STOCKS/Sequencing"
-  complete_data_folder: "./scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
-  data_folder: "data/"
+  genecore_data_folder: "/g/korbel/STOCKS/Sequencing"
+  complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS"
+  # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS_DEV"
+  # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
+  # data_folder: "/Users/tweber/Gits/belvedere/data"
+  data_folder: "/g/korbel/WORKFLOW_RESULTS"
   # data_folder: "/g/korbel/weber/TMP/WORKFLOW_RESULTS_DEV"
-  json_data_backup: "data_dev.json"
-  # json_data_backup: "/g/korbel/weber/TMP/data_dev.json"
+  json_data_backup: "/g/korbel/weber/TMP/data.json"
   rabbitmq:
     exchange: status_exchange
     queue: my_queue
@@ -13,9 +15,8 @@ data:
 
 # panoptes configuration
 panoptes:
-  url: "http://0.0.0.0:8058"
-  json_status_backup: "status_dev.json"
-  # json_status_backup: "/g/korbel/weber/TMP/status_dev.json"
+  url: "http://127.0.0.1:8058"
+  json_status_backup: "/g/korbel/weber/TMP/status.json"
   rabbitmq:
     exchange: data
     queue: data_queue

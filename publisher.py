@@ -45,6 +45,7 @@ def fetch_data_from_api():
 
 
 def get_files_structure(root_folder):
+    unwanted = ["._.DS_Store", ".DS_Store", "config"]
     data_dict = collections.defaultdict(list)
     for run_name_folder in os.listdir(root_folder):
         run_name = run_name_folder
@@ -55,8 +56,10 @@ def get_files_structure(root_folder):
         if matches:
             print("OK")
             for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
-                sample_name = sample_folder
-                data_dict[run_name].append(sample_name)
+                if sample_folder not in unwanted:
+                    
+                    sample_name = sample_folder
+                    data_dict[run_name].append(sample_name)
 
     return data_dict
 
