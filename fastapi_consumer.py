@@ -27,7 +27,7 @@ def load_from_json(filename: str):
 
 
 def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"]))
     channel = connection.channel()
 
     # Fetch the message without auto acknowledgment

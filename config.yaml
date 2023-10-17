@@ -1,6 +1,6 @@
 # Data location
 data:
-  genecore_data_folder: "/g/korbel/STOCKS/Sequencing"
+  genecore_data_folder: "/g/korbel/STOCKS/Data/Assay/sequencing/2023"
   complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS"
   # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS_DEV"
   # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"
@@ -13,6 +13,9 @@ data:
     queue: my_queue
     routing_key: latest_status
 
+rabbitmq_general_settings:
+  hostname: localhost
+
 # panoptes configuration
 panoptes:
   url: "http://127.0.0.1:8058"
@@ -21,27 +24,28 @@ panoptes:
     exchange: data
     queue: data_queue
     routing_key: latest_data
+    hostname: localhost
 
 # FastAPI configuration
 fastapi:
-  host: "0.0.0.0"
-  host_docker: "fastapi-backend"
-  # host: "seneca.embl.de"
+  # host: "0.0.0.0"
+  # host_docker: "fastapi-backend"
+  host: "seneca.embl.de"
   port: 8059
 
 # Dash configuration
 dash:
-  host: "0.0.0.0"
-  # host: "seneca.embl.de"
+  # host: "0.0.0.0"
+  host: "seneca.embl.de"
   port: 8060
 
 # Snakemake configuration
 snakemake:
-  # binary: "/g/korbel2/weber/miniconda3/envs/snakemake_panoptesfix/bin/snakemake"
-  binary: "/Users/tweber/miniconda3/envs/snakemake_latest/bin"
-  repository_location: "/Users/tweber/Gits/snakemake_logs_dev"
-  # repository_location: "/g/korbel2/weber/workspace/mosaicatcher-update"
+  binary: "/g/korbel2/weber/miniconda3/envs/snakemake_panoptesfix/bin/snakemake"
+  # binary: "/Users/tweber/miniconda3/envs/snakemake_latest/bin"
+  # repository_location: "/Users/tweber/Gits/snakemake_logs_dev"
+  repository_location: "/g/korbel2/weber/workspace/mosaicatcher-update"
 
 watchdog:
-  logs_folder: "/Users/tweber/Gits/snakemake_logs_dev/watchdog/logs"
-  # logs_folder: "/g/korbel2/weber/workspace/mosaicatcher-update/watchdog/logs"
+  # logs_folder: "/Users/tweber/Gits/snakemake_logs_dev/watchdog/logs"
+  logs_folder: "/g/korbel2/weber/workspace/mosaicatcher-update/watchdog/logs"

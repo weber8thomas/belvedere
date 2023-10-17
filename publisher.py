@@ -8,6 +8,7 @@ import httpx
 import json
 from config import load_config
 import yaml
+
 config = load_config()
 
 
@@ -57,7 +58,6 @@ def get_files_structure(root_folder):
             print("OK")
             for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
                 if sample_folder not in unwanted:
-                    
                     sample_name = sample_folder
                     data_dict[run_name].append(sample_name)
 
@@ -65,7 +65,7 @@ def get_files_structure(root_folder):
 
 
 def publish_to_rabbitmq(data=dict, exchange=str, queue=str, routing_key=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters("rabbitmq"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"]))
     channel = connection.channel()
 
     # Declare a topic exchange

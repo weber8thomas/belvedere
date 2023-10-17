@@ -49,7 +49,7 @@ root_folder = os.path.expanduser(config["data"]["data_folder"])
 
 
 def trigger_snakemake_api(pipeline, run, sample, snake_args):
-    FASTAPI_HOST = config["fastapi"]["host_docker"]
+    FASTAPI_HOST = config["fastapi"]["host"]
     FASTAPI_PORT = config["fastapi"]["port"]
 
     response = requests.post(
@@ -64,7 +64,7 @@ def trigger_snakemake_api(pipeline, run, sample, snake_args):
 
 # Fetching the file structure based on the root folder
 def fetch_data():
-    FASTAPI_HOST = config["fastapi"]["host_docker"]
+    FASTAPI_HOST = config["fastapi"]["host"]
     FASTAPI_PORT = config["fastapi"]["port"]
     response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
     response_json_complete = response.json()
@@ -939,7 +939,7 @@ def update_progress(data_panoptes_raw, url, selected_run, selected_sample, n_cli
 )
 def update_progress(url, progress_store):
     # Fetch processed data from FastAPI service
-    FASTAPI_HOST = config["fastapi"]["host_docker"]
+    FASTAPI_HOST = config["fastapi"]["host"]
     FASTAPI_PORT = config["fastapi"]["port"]
     response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-progress")
 
@@ -982,7 +982,7 @@ def update_progress(url, progress_store):
         return dash.no_update
     progress_store = data_panoptes
 
-    FASTAPI_HOST = config["fastapi"]["host_docker"]
+    FASTAPI_HOST = config["fastapi"]["host"]
     FASTAPI_PORT = config["fastapi"]["port"]
     response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
     response_json_complete = response.json()
@@ -1729,7 +1729,7 @@ def populate_container_sample(
         # Check which button was clicked last by comparing their timestamps
         elif n_clicks_report_ashleys_button and n_clicks_report_ashleys_button > report_ashleys_button_stored:
             pipeline = "ashleys-qc-pipeline"
-            FASTAPI_HOST = config["fastapi"]["host_docker"]
+            FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
             iframe = [
                 html.Iframe(
@@ -1747,7 +1747,7 @@ def populate_container_sample(
 
         elif n_clicks_report_mosaicatcher_button and n_clicks_report_mosaicatcher_button > report_mosaicatcher_button_stored:
             pipeline = "mosaicatcher-pipeline"
-            FASTAPI_HOST = config["fastapi"]["host_docker"]
+            FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
             print(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
             iframe = [

@@ -103,7 +103,7 @@ def main():
     structure = generate_internal_structure()
 
     # # Connect to the SQLite database (replace with your db name)
-    connection = sqlite3.connect(".panoptes.db.bak")
+    connection = sqlite3.connect(".panoptes.db")
 
     # Drop existing table, create a new one, and populate
     create_and_populate_table(connection, structure)
