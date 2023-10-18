@@ -21,6 +21,7 @@ import dash_mantine_components as dmc
 from dash import html, Output, Input, State
 import dash_auth
 import yaml
+
 VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
 
 # STRAND-SCAPE utils
@@ -802,14 +803,16 @@ def generate_progress_bar(entry):
         animated = False
         striped = False
         disabled = False
-    elif progress < 100 and status == "Error":
-        color = "danger"
-        animated = False
-        striped = False
-    elif progress < 100 and status == "Running":
+    # elif progress < 100 and status == "Error":
+    #     color = "danger"
+    #     animated = False
+    #     striped = False
+    # elif progress < 100 and status == "Running":
+    elif progress < 100:
         color = "primary"
         animated = True
         striped = True
+        label = f"{progress} %"
     elif progress == 0 and status == "not_started":
         color = "grey"
         animated = False

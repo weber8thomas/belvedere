@@ -9,6 +9,7 @@ import json
 from config import load_config
 import os
 import yaml
+
 config = load_config()
 
 app = FastAPI()
@@ -124,18 +125,15 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         stranscape_json = json.load(open(f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json", "r"))
         cell = stranscape_json["stored-selectedRows"][0]["cell"]
 
-        cmd = cmd[:-2] + [
-            "--force",
-            f"{data_location}/{date_folder}/{sample_name}/debug/mosaicatcher_fastqc/{cell}.1_fastqc.html",
-            "--rerun-triggers",
-            "mtime",
-        ]
+        # cmd = cmd[:-2] + [
+        #     "--force",
+        #     f"{data_location}/{date_folder}/{sample_name}/debug/mosaicatcher_fastqc/{cell}.1_fastqc.html",
+        #     "--rerun-triggers",
+        #     "mtime",
+        # ]
 
         print(cmd + profile_dry_run + dry_run_options)
         print(" ".join(cmd + profile_dry_run + dry_run_options))
-
-        print(cmd + profile_slurm + wms_monitor_args)
-        print(" ".join(cmd + profile_slurm + wms_monitor_args))
 
         # # Prepare process to perform dry run
         # process = subprocess.Popen(
@@ -201,7 +199,6 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
             else:
                 print("\nThe output is not as expected.")
 
-
     def run_second_command(
         cmd,
         wms_monitor_args,
@@ -235,8 +232,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         current_time = now.strftime("%Y%m%d%H%M%S")
 
         print("Running mosaicatcher for real")
-        print(cmd + profile_slurm)
-        print(" ".join(cmd + profile_slurm))
+        print(cmd + profile_slurm + wms_monitor_args)
+        print(" ".join(cmd + profile_slurm + wms_monitor_args))
 
         with open(
             f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log",
@@ -244,7 +241,7 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         ) as f:
             process2 = subprocess.Popen(
                 # cmd,
-                cmd + wms_monitor_args + profile_slurm,
+                cmd + profile_slurm + wms_monitor_args,
                 stdout=f,
                 stderr=f,
                 universal_newlines=True,
@@ -255,56 +252,56 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
             print("Return code: %s", process2.returncode)
 
-        logging.info("Generating ashleys report.")
-        print(report_location)
-        print(os.path.dirname(report_location))
-        os.makedirs(os.path.dirname(report_location), exist_ok=True)
+        # logging.info("Generating ashleys report.")
+        # print(report_location)
+        # print(os.path.dirname(report_location))
+        # os.makedirs(os.path.dirname(report_location), exist_ok=True)
 
-        # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
-        logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
+        # # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
+        # logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
 
-        # Change the permissions of the new directory
+        # # Change the permissions of the new directory
+        # # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
+
+        # print("Running command: %s", " ".join(cmd + profile_slurm + report_options))
+
+        # with open(
+        #     f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
+        #     "w",
+        # ) as f:
+        #     print(cmd + profile_slurm + report_options)
+        #     process2 = subprocess.Popen(
+        #         cmd + profile_dry_run + report_options,
+        #         stdout=f,
+        #         stderr=f,
+        #         universal_newlines=True,
+        #         cwd=working_directory,  # Change working directory
+        #         env=my_env,
+        #     )
+        #     # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
+        #     process2.wait()
+
+        #     logging.info("Return code: %s", process2.returncode)
+
+        # # ZIPFILE
+
+        # import zipfile
+
+        # # Check if the file exists and is a valid zip file
+        # if zipfile.is_zipfile(report_location):
+        #     # Specify the directory where you want to extract the contents
+        #     # If you want to extract in the same directory as the zip file, just use the parent directory
+        #     extract_location = "/".join(report_location.split("/")[:-1])
+
+        #     # Extract the zip file
+        #     with zipfile.ZipFile(report_location, "r") as zip_ref:
+        #         zip_ref.extractall(extract_location)
+        #     print(f"Extracted the archive to {extract_location}")
+        # else:
+        #     print(f"{report_location} is not a valid zip file.")
+
+        # # Change the permissions of the new directory
         # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
-
-        print("Running command: %s", " ".join(cmd + profile_slurm + report_options))
-
-        with open(
-            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
-            "w",
-        ) as f:
-            print(cmd + profile_slurm + report_options)
-            process2 = subprocess.Popen(
-                cmd + profile_dry_run + report_options,
-                stdout=f,
-                stderr=f,
-                universal_newlines=True,
-                cwd=working_directory,  # Change working directory
-                env=my_env,
-            )
-            # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
-            process2.wait()
-
-            logging.info("Return code: %s", process2.returncode)
-
-        # ZIPFILE
-
-        import zipfile
-
-        # Check if the file exists and is a valid zip file
-        if zipfile.is_zipfile(report_location):
-            # Specify the directory where you want to extract the contents
-            # If you want to extract in the same directory as the zip file, just use the parent directory
-            extract_location = "/".join(report_location.split("/")[:-1])
-
-            # Extract the zip file
-            with zipfile.ZipFile(report_location, "r") as zip_ref:
-                zip_ref.extractall(extract_location)
-            print(f"Extracted the archive to {extract_location}")
-        else:
-            print(f"{report_location} is not a valid zip file.")
-
-        # Change the permissions of the new directory
-        subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
 
     ############
     # START
@@ -314,8 +311,8 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 
     data_location = config["data"]["complete_data_folder"]
     publishdir_location = config["data"]["data_folder"]
-    profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/dev/slurm_legacy_conda/"]
-    # profile_slurm = ["--profile", "workflow/snakemake_profiles/HPC/slurm_EMBL/"]
+    # profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/dev/slurm_legacy_conda/"]
+    profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/slurm_EMBL/"]
     profile_dry_run = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/local/conda/"]
     dry_run_options = ["-c", "1", "-n", "-q"]
     snakemake_binary = config["snakemake"]["binary"]
@@ -368,10 +365,10 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     # Panoptes
 
     wms_monitor_args = [
-        "--wms-monitor",
-        f"{wms_monitor_options}",
         "--wms-monitor-arg",
         f"{wms_monitor_renaming_option}",
+        "--wms-monitor",
+        f"{wms_monitor_options}",
     ]
 
     # Append the snake_args to cmd
