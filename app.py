@@ -23,6 +23,9 @@ import dash_auth
 import yaml
 import plotly.express as px
 
+# TODO: use redis to load parquet for vizu 
+
+
 
 VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
 
