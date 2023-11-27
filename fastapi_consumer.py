@@ -231,77 +231,77 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # Convert it to a string
         current_time = now.strftime("%Y%m%d%H%M%S")
 
-        print("Running mosaicatcher for real")
-        print(cmd + profile_slurm + wms_monitor_args)
-        print(" ".join(cmd + profile_slurm + wms_monitor_args))
-
-        with open(
-            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log",
-            "w",
-        ) as f:
-            process2 = subprocess.Popen(
-                # cmd,
-                cmd + profile_slurm + wms_monitor_args,
-                stdout=f,
-                stderr=f,
-                universal_newlines=True,
-                cwd=working_directory,  # Change working directory
-                env=my_env,
-            )
-            process2.wait()
-
-            print("Return code: %s", process2.returncode)
-
-        # logging.info("Generating ashleys report.")
-        # print(report_location)
-        # print(os.path.dirname(report_location))
-        # os.makedirs(os.path.dirname(report_location), exist_ok=True)
-
-        # # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
-        # logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
-
-        # # Change the permissions of the new directory
-        # # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
-
-        # print("Running command: %s", " ".join(cmd + profile_slurm + report_options))
+        # print("Running mosaicatcher for real")
+        # print(cmd + profile_slurm + wms_monitor_args)
+        # print(" ".join(cmd + profile_slurm + wms_monitor_args))
 
         # with open(
-        #     f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
+        #     f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}.log",
         #     "w",
         # ) as f:
-        #     print(cmd + profile_slurm + report_options)
         #     process2 = subprocess.Popen(
-        #         cmd + profile_dry_run + report_options,
+        #         # cmd,
+        #         cmd + profile_slurm + wms_monitor_args,
         #         stdout=f,
         #         stderr=f,
         #         universal_newlines=True,
         #         cwd=working_directory,  # Change working directory
         #         env=my_env,
         #     )
-        #     # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
         #     process2.wait()
 
-        #     logging.info("Return code: %s", process2.returncode)
+        #     print("Return code: %s", process2.returncode)
 
-        # # ZIPFILE
+        # logging.info("Generating ashleys report.")
+        # print(report_location)
+        # print(os.path.dirname(report_location))
+        # os.makedirs(os.path.dirname(report_location), exist_ok=True)
 
-        # import zipfile
+        # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
+        logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
 
-        # # Check if the file exists and is a valid zip file
-        # if zipfile.is_zipfile(report_location):
-        #     # Specify the directory where you want to extract the contents
-        #     # If you want to extract in the same directory as the zip file, just use the parent directory
-        #     extract_location = "/".join(report_location.split("/")[:-1])
-
-        #     # Extract the zip file
-        #     with zipfile.ZipFile(report_location, "r") as zip_ref:
-        #         zip_ref.extractall(extract_location)
-        #     print(f"Extracted the archive to {extract_location}")
-        # else:
-        #     print(f"{report_location} is not a valid zip file.")
-
-        # # Change the permissions of the new directory
+        # Change the permissions of the new directory
         # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
+
+        print("Running command: %s", " ".join(cmd + profile_slurm + report_options))
+
+        with open(
+            f"{watchdog_logs_folder}/per-run/{pipeline}/{date_folder}_{current_time}_report.log",
+            "w",
+        ) as f:
+            print(cmd + profile_slurm + report_options)
+            process2 = subprocess.Popen(
+                cmd + profile_dry_run + report_options,
+                stdout=f,
+                stderr=f,
+                universal_newlines=True,
+                cwd=working_directory,  # Change working directory
+                env=my_env,
+            )
+            # process2 = subprocess.Popen(cmd + profile_slurm + report_options, stdout=f, stderr=f, universal_newlines=True)
+            process2.wait()
+
+            logging.info("Return code: %s", process2.returncode)
+
+        # ZIPFILE
+
+        import zipfile
+
+        # Check if the file exists and is a valid zip file
+        if zipfile.is_zipfile(report_location):
+            # Specify the directory where you want to extract the contents
+            # If you want to extract in the same directory as the zip file, just use the parent directory
+            extract_location = "/".join(report_location.split("/")[:-1])
+
+            # Extract the zip file
+            with zipfile.ZipFile(report_location, "r") as zip_ref:
+                zip_ref.extractall(extract_location)
+            print(f"Extracted the archive to {extract_location}")
+        else:
+            print(f"{report_location} is not a valid zip file.")
+
+        # Change the permissions of the new directory
+        subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
 
     ############
     # START

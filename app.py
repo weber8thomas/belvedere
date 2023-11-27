@@ -21,6 +21,8 @@ import dash_mantine_components as dmc
 from dash import html, Output, Input, State
 import dash_auth
 import yaml
+import plotly.express as px
+
 
 VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
 
@@ -69,10 +71,15 @@ def fetch_data():
     FASTAPI_PORT = config["fastapi"]["port"]
     response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
     response_json_complete = response.json()
-    response_json = collections.OrderedDict(sorted(response_json_complete[0].items()))
-    print(response_json)
+    response_json = collections.OrderedDict(
+        sorted(
+            response_json_complete[0].items(),
+            # key=lambda x: list(response_json_complete[0].keys()).index(x),
+            reverse=True,
+        )
+    )
     timestamp = response_json_complete[1]
-
+    print("SORTED DICT")
     print(response_json)
     print(timestamp)
     return response_json
@@ -205,7 +212,9 @@ def fill_sample_wise_container(url):
                 sample_json = json.load(open(belvedere_json_path))
                 if "stored-selectedRows" not in sample_json:
                     print(df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)])
-                    sample_json["stored-selectedRows"] = df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict("records")
+                    sample_json["stored-selectedRows"] = df.loc[
+                        (df["prediction"] == 1) & (df["pass1"] == 1)
+                    ].to_dict("records")
             else:
                 sample_json = {
                     "stored-report-button-ashleys": 0,
@@ -213,7 +222,9 @@ def fill_sample_wise_container(url):
                         "n_clicks": 0,
                         "run_mosaicatcher_disabled": True,
                     },
-                    "stored-selectedRows": df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict("records"),
+                    "stored-selectedRows": df.loc[
+                        (df["prediction"] == 1) & (df["pass1"] == 1)
+                    ].to_dict("records"),
                     "stored-homepage-button": 0,
                     "stored-report-button-mosaicatcher": 0,
                     "stored-run-mosaicatcher-button": {"n_clicks": 0, "disabled": True},
@@ -482,7 +493,10 @@ def update_progress(url):
                 dmc.MultiSelect(
                     id="run-dropdown",
                     placeholder="Select a run",
-                    data=[{"label": run, "value": run} for run in sorted(tmp_data.keys())],
+                    data=[
+                        {"label": run, "value": run}
+                        for run in sorted(tmp_data.keys(), reverse=False)
+                    ],
                     persistence=True,
                     persistence_type="session",
                     # radius="xl",
@@ -497,7 +511,11 @@ def update_progress(url):
             [
                 dmc.MultiSelect(
                     id="sample-dropdown",
-                    data=[{"label": sample, "value": sample} for run in sorted(tmp_data.keys()) for sample in sorted(tmp_data[run])],
+                    data=[
+                        {"label": sample, "value": sample}
+                        for run in sorted(tmp_data.keys(), reverse=False)
+                        for sample in sorted(tmp_data[run], reverse=False)
+                    ],
                     placeholder="Select a sample",
                     persistence=True,
                     persistence_type="session",
@@ -566,7 +584,9 @@ def set_sample_options(selected_run):
         raise dash.exceptions.PreventUpdate
     tmp_data = fetch_data()
     sample_names = tmp_data[selected_run]
-    return [{"label": sample_name, "value": sample_name} for sample_name in sample_names]
+    return [
+        {"label": sample_name, "value": sample_name} for sample_name in sample_names
+    ]
 
 
 @app.callback(
@@ -613,7 +633,9 @@ def save_selected_rows_and_disable_redirect_button(
             raise dash.exceptions.PreventUpdate
         else:
             run, sample = url.split("/")[1:3]
-            processed_df_path = f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            processed_df_path = (
+                f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            )
             complete_data_folder = config["data"]["complete_data_folder"]
             processed_df_path_scratch = f"{complete_data_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
             os.makedirs(os.path.dirname(processed_df_path_scratch), exist_ok=True)
@@ -634,7 +656,9 @@ def save_selected_rows_and_disable_redirect_button(
                     for col in ["prediction", "probability"]:
                         processed_df[f"{col}_bak"] = processed_df[col]
 
-                    selected_cells = pd.DataFrame.from_records(selected_rows).cell.values.tolist()
+                    selected_cells = pd.DataFrame.from_records(
+                        selected_rows
+                    ).cell.values.tolist()
 
                     # Set 'prediction' and 'probability' directly in processed_df based on condition
                     processed_df.loc[
@@ -647,10 +671,14 @@ def save_selected_rows_and_disable_redirect_button(
                     ] = 0
 
                     # Sort and reset index
-                    processed_df = processed_df.sort_values(by="cell").reset_index(drop=True)
+                    processed_df = processed_df.sort_values(by="cell").reset_index(
+                        drop=True
+                    )
 
                     processed_df.to_csv(processed_df_path, sep="\t", index=False)
-                    processed_df.to_csv(processed_df_path_scratch, sep="\t", index=False)
+                    processed_df.to_csv(
+                        processed_df_path_scratch, sep="\t", index=False
+                    )
                     # print(processed_df)
                     stored_save_button["run_mosaicatcher_disabled"] = False
                     print("save_selected_rows_and_disable_redirect_button")
@@ -746,7 +774,10 @@ def disable_report_button(progress_store, url):
     if url != "/":
         run, sample = url.split("/")[1:3]
         print(run, sample)
-        if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] == "Done":
+        if (
+            progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
+            == "Done"
+        ):
             return False, False
         else:
             return True, True
@@ -773,10 +804,16 @@ def disable_report_button(url, progress_store, store_save_button):
         print("disable_report_button")
         print(run, sample, progress_store[f"{run}--{sample}"])
         print(store_save_button)
-        if progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"] == "Done":
+        if (
+            progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"]
+            == "Done"
+        ):
             return False, True
         else:
-            if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] == "Done":
+            if (
+                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
+                == "Done"
+            ):
                 return True, store_save_button["run_mosaicatcher_disabled"]
             else:
                 return True, True
@@ -803,10 +840,11 @@ def generate_progress_bar(entry):
         animated = False
         striped = False
         disabled = False
-    # elif progress < 100 and status == "Error":
-    #     color = "danger"
-    #     animated = False
-    #     striped = False
+    elif progress == 100 and status in ["Missing report", "Completed but status error"]:
+        # elif progress < 100 and status == "Error":
+        color = "orange"
+        animated = False
+        striped = False
     # elif progress < 100 and status == "Running":
     elif progress < 100:
         color = "primary"
@@ -844,7 +882,9 @@ def generate_progress_bar(entry):
     Input("refresh-button", "n_clicks"),
     State("stored-refresh-button", "data"),
 )
-def update_progress(data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks):
+def update_progress(
+    data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks
+):
     print("UPDATE PROGRESS")
     print(n_clicks, stored_n_clicks)
     continue_update = False
@@ -867,7 +907,11 @@ def update_progress(data_panoptes_raw, url, selected_run, selected_sample, n_cli
                 print(n_clicks, stored_n_clicks)
                 components = []
 
-                data_panoptes = collections.OrderedDict(sorted(data_panoptes_raw.items()))
+                data_panoptes = collections.OrderedDict(
+                    sorted(data_panoptes_raw.items(), reverse=True)
+                )
+                print("DATA PANOPTES")
+                print(data_panoptes)
 
                 # Generate progress bars
                 for entry in data_panoptes:
@@ -885,7 +929,9 @@ def update_progress(data_panoptes_raw, url, selected_run, selected_sample, n_cli
                             "ashleys-qc-pipeline",
                             "mosaicatcher-pipeline",
                         ]:
-                            pipeline_progress[pipeline] = generate_progress_bar(data_panoptes[entry][pipeline])
+                            pipeline_progress[pipeline] = generate_progress_bar(
+                                data_panoptes[entry][pipeline]
+                            )
 
                         row = dbc.Row(
                             [
@@ -961,8 +1007,14 @@ def update_progress(url, progress_store):
     # Extract data
 
     tmp_data = fetch_data()
-    data_lite = [f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v)]
-    data_panoptes_raw = [wf for wf in response_json["workflows"] if "--".join(wf["name"].split("--")[1:]) in data_lite]
+    data_lite = [
+        f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v, reverse=False)
+    ]
+    data_panoptes_raw = [
+        wf
+        for wf in response_json["workflows"]
+        if "--".join(wf["name"].split("--")[1:]) in data_lite
+    ]
 
     data_panoptes = collections.defaultdict(dict)
     for wf in data_panoptes_raw:
@@ -993,7 +1045,9 @@ def update_progress(url, progress_store):
     timestamp_data = response_json_complete[1]
 
     timestamp_data = dmc.Text(f"Last data update: {timestamp_data}", size="xs")
-    timestamp_progress = dmc.Text(f"Last progress update: {timestamp_progress}", size="xs")
+    timestamp_progress = dmc.Text(
+        f"Last progress update: {timestamp_progress}", size="xs"
+    )
     div_timestamps = html.Div([timestamp_data, timestamp_progress])
     return data_panoptes, div_timestamps
 
@@ -1010,7 +1064,9 @@ def update_progress(url, progress_store):
         run, sample = url.split("/")[1:3]
 
         if progress_store != {}:
-            progress_bar = generate_progress_bar(progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"])
+            progress_bar = generate_progress_bar(
+                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]
+            )
 
         else:
             progress_bar = generate_progress_bar({"status": "not_started"})
@@ -1032,7 +1088,9 @@ def update_progress(url, progress_store):
         # print("\n\n")
 
         if progress_store != {}:
-            progress_bar = generate_progress_bar(progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"])
+            progress_bar = generate_progress_bar(
+                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
+            )
 
         else:
             progress_bar = generate_progress_bar({"status": "not_started"})
@@ -1090,44 +1148,48 @@ def fill_metadata_container(url, n_clicks, progress_store):
                 )
                 for k, v in metadata_dict.items()
             ]
-            # + [
-            #     dbc.Row(
-            #         [
-            #             dbc.Col(
-            #                 dmc.Text("Panoptes ashleys link", size="lg", weight=500),
-            #                 width=4,
-            #             ),
-            #             dbc.Col(
-            #                 dcc.Link(
-            #                     "Panoptes",
-            #                     href=f"http://localhost:8058/workflow/{ashleys_run_id}",
-            #                     style={"color": "black", "text-decoration": "none"},
-            #                 ),
-            #                 width="auto",
-            #             ),
-            #         ]
-            #     ),
-            #     dbc.Row(
-            #         [
-            #             dbc.Col(
-            #                 dmc.Text("Panoptes mosaicatcher link", size="lg", weight=500),
-            #                 width=4,
-            #             ),
-            #             dbc.Col(
-            #                 dcc.Link(
-            #                     "Panoptes",
-            #                     href=f"http://localhost:8058/workflow/{mosaicatcher_run_id}",
-            #                     style={"color": "black", "text-decoration": "none"},
-            #                 ),
-            #                 width="auto",
-            #             ),
-            #         ]
-            #     )
-            # ]
         )
+
+        figure = dcc.Graph(figure=px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16]))
+
+        # + [
+        #     dbc.Row(
+        #         [
+        #             dbc.Col(
+        #                 dmc.Text("Panoptes ashleys link", size="lg", weight=500),
+        #                 width=4,
+        #             ),
+        #             dbc.Col(
+        #                 dcc.Link(
+        #                     "Panoptes",
+        #                     href=f"http://localhost:8058/workflow/{ashleys_run_id}",
+        #                     style={"color": "black", "text-decoration": "none"},
+        #                 ),
+        #                 width="auto",
+        #             ),
+        #         ]
+        #     ),
+        #     dbc.Row(
+        #         [
+        #             dbc.Col(
+        #                 dmc.Text("Panoptes mosaicatcher link", size="lg", weight=500),
+        #                 width=4,
+        #             ),
+        #             dbc.Col(
+        #                 dcc.Link(
+        #                     "Panoptes",
+        #                     href=f"http://localhost:8058/workflow/{mosaicatcher_run_id}",
+        #                     style={"color": "black", "text-decoration": "none"},
+        #                 ),
+        #                 width="auto",
+        #             ),
+        #         ]
+        #     )
+        # ]
+        # )
         # print(card)
 
-        return card
+        return [card, html.Hr(), dmc.Title("Visualisation"), figure]
 
 
 @app.callback(
@@ -1244,7 +1306,11 @@ def trigger_snakemake(
                 html.Div(
                     [
                         # html.Hr(),
-                        dmc.Center(dmc.Text("Email not valid", color="red", weight=700, size="lg")),
+                        dmc.Center(
+                            dmc.Text(
+                                "Email not valid", color="red", weight=700, size="lg"
+                            )
+                        ),
                     ]
                 ),
                 n,
@@ -1256,8 +1322,12 @@ def trigger_snakemake(
 
             snake_args = {
                 "email": email,
-                "multistep_normalisation_for_SV_calling": True if sv_calling == "multistep_normalisation_for_SV_calling" else False,
-                "hgsvc_based_normalized_counts": True if sv_calling == "hgsvc_based_normalized_counts" else False,
+                "multistep_normalisation_for_SV_calling": True
+                if sv_calling == "multistep_normalisation_for_SV_calling"
+                else False,
+                "hgsvc_based_normalized_counts": True
+                if sv_calling == "hgsvc_based_normalized_counts"
+                else False,
                 "blacklisting": blacklisting,
             }
             snake_args["multistep_normalisation"] = True
@@ -1335,7 +1405,9 @@ def generate_form_element(selected_run, selected_sample):
                         [
                             dbc.Label(
                                 "Email",
-                                html_for={"type": f"email-{selected_run}-{selected_sample}"},
+                                html_for={
+                                    "type": f"email-{selected_run}-{selected_sample}"
+                                },
                                 width=2,
                             ),
                             dbc.Col(
@@ -1641,9 +1713,13 @@ def populate_container_sample(
         )
 
         index = "PE20"
-        genecore_filepath = f"/g/korbel/STOCKS/Data/Assay/sequencing/2023/{selected_run}"
+        genecore_filepath = (
+            f"/g/korbel/STOCKS/Data/Assay/sequencing/2023/{selected_run}"
+        )
         pipeline_processed_data_filepath = f"/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/{selected_run}/{selected_sample}"
-        backup_processed_data_filepath = f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
+        backup_processed_data_filepath = (
+            f"/g/korbel/WORKFLOW_RESULTS/{selected_run}/{selected_sample}"
+        )
 
         metadata_dict = {
             "Sample name": selected_sample,
@@ -1719,7 +1795,10 @@ def populate_container_sample(
             ]
         )
 
-        if n_clicks_homepage_button and n_clicks_homepage_button > report_homepage_button_stored:
+        if (
+            n_clicks_homepage_button
+            and n_clicks_homepage_button > report_homepage_button_stored
+        ):
             return (
                 homepage_layout,
                 n_clicks_homepage_button,
@@ -1730,7 +1809,10 @@ def populate_container_sample(
             )
 
         # Check which button was clicked last by comparing their timestamps
-        elif n_clicks_report_ashleys_button and n_clicks_report_ashleys_button > report_ashleys_button_stored:
+        elif (
+            n_clicks_report_ashleys_button
+            and n_clicks_report_ashleys_button > report_ashleys_button_stored
+        ):
             pipeline = "ashleys-qc-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
@@ -1748,11 +1830,16 @@ def populate_container_sample(
                 n_clicks_report_mosaicatcher_button,
             )
 
-        elif n_clicks_report_mosaicatcher_button and n_clicks_report_mosaicatcher_button > report_mosaicatcher_button_stored:
+        elif (
+            n_clicks_report_mosaicatcher_button
+            and n_clicks_report_mosaicatcher_button > report_mosaicatcher_button_stored
+        ):
             pipeline = "mosaicatcher-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
-            print(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html")
+            print(
+                f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html"
+            )
             iframe = [
                 html.Iframe(
                     src=f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/reports/{selected_run}--{selected_sample}/{pipeline}/report.html",
@@ -1766,7 +1853,10 @@ def populate_container_sample(
                 n_clicks_beldevere_button,
                 n_clicks_report_mosaicatcher_button,
             )
-        elif n_clicks_beldevere_button and n_clicks_beldevere_button > beldevere_button_stored:
+        elif (
+            n_clicks_beldevere_button
+            and n_clicks_beldevere_button > beldevere_button_stored
+        ):
             form_element = generate_form_element(selected_run, selected_sample)
             print(form_element)
             x = len(selected_rows)
@@ -1859,7 +1949,9 @@ def populate_container_sample(
                                                     style={"width": "auto"},
                                                     size="xl",
                                                     radius="xl",
-                                                    leftIcon=DashIconify(icon="zondicons:play-outline"),
+                                                    leftIcon=DashIconify(
+                                                        icon="zondicons:play-outline"
+                                                    ),
                                                 ),
                                             ]
                                         ),
@@ -1978,7 +2070,9 @@ sidebar = html.Div(
         ),
         dbc.Modal(
             [
-                dbc.ModalHeader(html.H1("Warning!", className="text-warning"), id="modal-header"),
+                dbc.ModalHeader(
+                    html.H1("Warning!", className="text-warning"), id="modal-header"
+                ),
                 dbc.ModalBody(
                     html.H5(id="modal-body", className="text-warning"),
                     # style={"background-color": "#F0FFF0"},

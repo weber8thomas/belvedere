@@ -74,11 +74,13 @@ def create_and_populate_table(connection, structure):
     )
 
     # Populate the table with the new structure
-    timestamp = datetime.now().isoformat(" ")
 
     for run, samples in structure.items():
         for sample in samples:
             name = f"ashleys-qc-pipeline--{run}--{sample}"
+        
+            timestamp = datetime.now().isoformat(" ")
+
             cursor.execute(
                 """
                 INSERT INTO workflows (name, status, done, total, started_at, completed_at)
