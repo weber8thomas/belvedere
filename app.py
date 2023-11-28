@@ -24,10 +24,12 @@ from dash import html, Output, Input, State
 import dash_auth
 import yaml
 import plotly.express as px
-
-# TODO: use redis to load parquet for vizu
-
 import redis
+
+from dotenv import load_dotenv
+load_dotenv()
+
+
 
 redis_client = redis.Redis(
     host="localhost",
@@ -39,7 +41,9 @@ df = pd.read_parquet("strandscape_vizu_dev.parquet")
 df["prediction"] = df["prediction"].astype(str)
 
 
-VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
+VALID_USERNAME_PASSWORD_PAIRS = {
+    os.getenv("USERNAME"): os.getenv("PASSWORD_STRANDSCAPE"),
+}
 
 # STRAND-SCAPE utils
 from utils import merge_labels_and_info, get_files_structure
