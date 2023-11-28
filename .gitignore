@@ -152,3 +152,4 @@ assets/
 dev/jbrowse_dev/assets/
 *.json
 *.db
+strandscape_vizu_dev.parquet

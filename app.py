@@ -1,4 +1,5 @@
 # IMPORTS
+from io import BytesIO
 import threading
 import collections
 import datetime
@@ -14,6 +15,7 @@ import dash_bootstrap_components as dbc
 import dash
 import dash_ag_grid as dag
 from pprint import pprint
+import plotly
 import requests
 import yaml
 import time
@@ -23,8 +25,18 @@ import dash_auth
 import yaml
 import plotly.express as px
 
-# TODO: use redis to load parquet for vizu 
+# TODO: use redis to load parquet for vizu
 
+import redis
+
+redis_client = redis.Redis(
+    host="localhost",
+    port=6379,
+    db=0,
+)
+
+df = pd.read_parquet("strandscape_vizu_dev.parquet")
+df["prediction"] = df["prediction"].astype(str)
 
 
 VALID_USERNAME_PASSWORD_PAIRS = {"korbelgroup": "strandscape"}
@@ -72,20 +84,46 @@ def trigger_snakemake_api(pipeline, run, sample, snake_args):
 def fetch_data():
     FASTAPI_HOST = config["fastapi"]["host"]
     FASTAPI_PORT = config["fastapi"]["port"]
-    response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
-    response_json_complete = response.json()
+
+    if redis_client.exists("fetch_data"):
+        print("FETCH DATA exists in Redis")
+
+        # Get the figure from Redis
+        response_json_complete = redis_client.get("fetch_data")
+        timestamp = redis_client.get("timestamp_fetch_data")
+
+        # Deserialize the JSON back to a Plotly figure
+        # Since Redis returns data in bytes, we need to convert it to a string
+        response_json_complete = json.loads(response_json_complete)
+
+    else:
+        print("FETCH DATA does not exist in Redis")
+
+        response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
+        response_json_complete = response.json()[0]
+        timestamp = response.json()[1]
+        # response_json_complete = response_json_complete[0].items()
+        # print(response_json_complete)
+
+        # Store the figure in Redis
+        # Assuming the key for storing the figure is 'my_figure'
+        redis_client.set("fetch_data", json.dumps(response_json_complete), ex=60)
+        redis_client.set("timestamp_fetch_data", timestamp, ex=60)
+
+    print(response_json_complete, type(response_json_complete))
     response_json = collections.OrderedDict(
-        sorted(
-            response_json_complete[0].items(),
-            # key=lambda x: list(response_json_complete[0].keys()).index(x),
-            reverse=True,
-        )
+        # sorted(
+        response_json_complete,
+        #     # key=lambda x: list(response_json_complete[0].keys()).index(x),
+        #     reverse=True,
+        # )
     )
-    timestamp = response_json_complete[1]
-    print("SORTED DICT")
     print(response_json)
-    print(timestamp)
-    return response_json
+
+    # print("SORTED DICT")
+    # print(response_json)
+    # print(timestamp)
+    return response_json, timestamp
 
 
 # Callback to populate the main content area based on the selected run and sample
@@ -488,7 +526,7 @@ def update_progress(url):
         ]
     )
 
-    tmp_data = fetch_data()
+    tmp_data, timestamp = fetch_data()
 
     dropdown_components = [
         dbc.Col(
@@ -557,7 +595,10 @@ def update_progress(url):
                 header_landing_page,
                 dbc.Row(children=headers_components, style={"paddingBottom": "0px"}),
                 dbc.Row(children=dropdown_components, style={"paddingBottom": "20px"}),
-                html.Div(id="progress-container-landing-page"),
+                dbc.Spinner(
+                    html.Div(id="progress-container-landing-page"),
+                    spinner_style={"width": "3rem", "height": "3rem"},
+                ),
             ]
         )
     ]
@@ -585,7 +626,7 @@ def set_run_value(options):
 def set_sample_options(selected_run):
     if not selected_run:
         raise dash.exceptions.PreventUpdate
-    tmp_data = fetch_data()
+    tmp_data, timestamp = fetch_data()
     sample_names = tmp_data[selected_run]
     return [
         {"label": sample_name, "value": sample_name} for sample_name in sample_names
@@ -913,8 +954,8 @@ def update_progress(
                 data_panoptes = collections.OrderedDict(
                     sorted(data_panoptes_raw.items(), reverse=True)
                 )
-                print("DATA PANOPTES")
-                print(data_panoptes)
+                # print("DATA PANOPTES")
+                # print(data_panoptes)
 
                 # Generate progress bars
                 for entry in data_panoptes:
@@ -1009,7 +1050,7 @@ def update_progress(url, progress_store):
     # print("\n\n")
     # Extract data
 
-    tmp_data = fetch_data()
+    tmp_data, timestamp = fetch_data()
     data_lite = [
         f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v, reverse=False)
     ]
@@ -1040,14 +1081,14 @@ def update_progress(url, progress_store):
         return dash.no_update
     progress_store = data_panoptes
 
-    FASTAPI_HOST = config["fastapi"]["host"]
-    FASTAPI_PORT = config["fastapi"]["port"]
-    response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
-    response_json_complete = response.json()
-    response_json = response_json_complete[0]
-    timestamp_data = response_json_complete[1]
+    # FASTAPI_HOST = config["fastapi"]["host"]
+    # FASTAPI_PORT = config["fastapi"]["port"]
+    # response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
+    # response_json_complete = response.json()
+    # response_json = response_json_complete[0]
+    # timestamp_data = response_json_complete[1]
 
-    timestamp_data = dmc.Text(f"Last data update: {timestamp_data}", size="xs")
+    timestamp_data = dmc.Text(f"Last data update: {timestamp}", size="xs")
     timestamp_progress = dmc.Text(
         f"Last progress update: {timestamp_progress}", size="xs"
     )
@@ -1098,6 +1139,173 @@ def update_progress(url, progress_store):
         else:
             progress_bar = generate_progress_bar({"status": "not_started"})
         return progress_bar
+
+
+def violinplot_context(run, sample):
+    if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
+        # Check if the figure exists in Redis
+        fig_name = "violin_fig"
+        if redis_client.exists(fig_name):
+            print("Figure exists in Redis")
+
+            # Get the figure from Redis
+            retrieved_figure_json = redis_client.get(fig_name)
+
+            # Deserialize the JSON back to a Plotly figure
+            # Since Redis returns data in bytes, we need to convert it to a string
+            retrieved_figure_json = retrieved_figure_json.decode("utf-8")
+            fig = plotly.io.from_json(retrieved_figure_json)
+
+        else:
+            print("Figure does not exist in Redis")
+
+            # Create a Plotly figure
+            # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
+
+            fig = px.box(
+                df,
+                x="sample",
+                y="good",
+                color="depictio_run_id",
+                # facet_col="year",
+                height=1000,
+                hover_data=["depictio_run_id", "sample", "cell", "good"],
+                points="all",
+                boxmode="overlay",
+            )
+
+            # Serialize the figure to JSON
+            figure_json = plotly.io.to_json(fig)
+
+            # Store the figure in Redis
+            # Assuming the key for storing the figure is 'my_figure'
+            redis_client.set(fig_name, figure_json, ex=60)
+
+        highlight_sample_position = df["sample"].unique().tolist().index(sample)
+
+        fig.add_vline(
+            x=highlight_sample_position,
+            line_width=3,
+            line_dash="dash",
+            line_color="red",
+        )
+
+        figure = dcc.Graph(figure=fig, style={"height": "50vh"})
+        return figure
+
+    else:
+        return "No data available yet for this run/sample combination"
+
+
+def bar_dupl(run, sample):
+    if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
+        # Check if the figure exists in Redis
+        fig_name = f"bar_dup_fig_{run}_{sample}"
+        if redis_client.exists(fig_name):
+            print("Figure exists in Redis")
+
+            # Get the figure from Redis
+            retrieved_figure_json = redis_client.get(fig_name)
+
+            # Deserialize the JSON back to a Plotly figure
+            # Since Redis returns data in bytes, we need to convert it to a string
+            retrieved_figure_json = retrieved_figure_json.decode("utf-8")
+            fig = plotly.io.from_json(retrieved_figure_json)
+
+        else:
+            print("Figure does not exist in Redis")
+
+            # Create a Plotly figure
+            # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
+
+            fig = px.bar(
+                df.loc[df["sample"] == sample],
+                x="cell",
+                y="dupl",
+                color="prediction",
+                color_discrete_sequence=["red", "green"],
+                # facet_col="year",
+                hover_data=["depictio_run_id", "sample", "cell", "good", "dupl"],
+                # points="all",
+            )
+
+            # Serialize the figure to JSON
+            figure_json = plotly.io.to_json(fig)
+
+            # Store the figure in Redis
+            # Assuming the key for storing the figure is 'my_figure'
+            redis_client.set(fig_name, figure_json, ex=60)
+
+        figure = dcc.Graph(figure=fig, style={"height": "50vh"})
+        # figure = dcc.Graph(figure=fig, style={"width": "50vh", "height": "50vh"})
+        return figure
+
+    else:
+        return "No data available yet for this run/sample combination"
+
+
+def cell_distribution(run, sample):
+    if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
+        # Check if the figure exists in Redis
+        fig_name = f"scatter_fig_{run}_{sample}"
+        if redis_client.exists(fig_name):
+            print("Figure exists in Redis")
+
+            # Get the figure from Redis
+            retrieved_figure_json = redis_client.get(fig_name)
+
+            # Deserialize the JSON back to a Plotly figure
+            # Since Redis returns data in bytes, we need to convert it to a string
+            retrieved_figure_json = retrieved_figure_json.decode("utf-8")
+            fig = plotly.io.from_json(retrieved_figure_json)
+
+        else:
+            print("Figure does not exist in Redis")
+
+            # Create a Plotly figure
+            # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
+
+            fig = px.scatter(
+                df.loc[df["sample"] == sample],
+                x="cell",
+                y="good",
+                color="prediction",
+                color_discrete_sequence=["red", "green"],
+                # facet_col="year",
+                hover_data=[
+                    "depictio_run_id",
+                    "sample",
+                    "cell",
+                    "mapped",
+                    "dupl",
+                    "good",
+                ],
+            )
+
+            fig.update_layout(yaxis_type="log")
+            fig.update_traces(marker=dict(size=10))  # Change 12 to your desired size
+
+            # Serialize the figure to JSON
+            figure_json = plotly.io.to_json(fig)
+
+            # Store the figure in Redis
+            # Assuming the key for storing the figure is 'my_figure'
+            redis_client.set(fig_name, figure_json, ex=60)
+
+        # highlight_sample_position = df["sample"].unique().tolist().index(sample)
+
+        # fig.add_vline(
+        #     x=highlight_sample_position,
+        #     line_width=3,
+        #     line_dash="dash",
+        #     line_color="red",
+        # )
+
+        figure = dcc.Graph(figure=fig, style={"height": "50vh"})
+        # figure = dcc.Graph(figure=fig, style={"width": "50vh", "height": "50vh"})
+        return figure
+    else:
+        return "No data available yet for this run/sample combination"
 
 
 @app.callback(
@@ -1153,7 +1361,28 @@ def fill_metadata_container(url, n_clicks, progress_store):
             ]
         )
 
-        figure = dcc.Graph(figure=px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16]))
+        # Later, when you need to retrieve the figure
+
+        violin_plot = violinplot_context(run, sample)
+
+        cell_distribution_plot = cell_distribution(run, sample)
+
+        box_dupl_plot = bar_dupl(run, sample)
+
+        row = dbc.Row(
+            [
+                dbc.Col(
+                    [dmc.Title("Sample context", order=3), cell_distribution_plot],
+                    width=6,
+                ),
+                dbc.Col(
+                    [dmc.Title("Duplication level", order=3), box_dupl_plot], width=6
+                ),
+            ]
+        )
+
+        # figure = dcc.Graph(figure=px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16]))
+        # export that figure into redis and then load it from redis
 
         # + [
         #     dbc.Row(
@@ -1192,7 +1421,15 @@ def fill_metadata_container(url, n_clicks, progress_store):
         # )
         # print(card)
 
-        return [card, html.Hr(), dmc.Title("Visualisation"), figure]
+        return [
+            card,
+            html.Hr(),
+            dmc.Title("Visualisation", order=2),
+            dmc.Title("Global context", order=3),
+            violin_plot,
+            row,
+            html.Hr(),
+        ]
 
 
 @app.callback(
@@ -1758,13 +1995,7 @@ def populate_container_sample(
 
         homepage_layout = html.Div(
             children=[
-                dmc.Title(
-                    f"{selected_sample} metadata",
-                    order=2,
-                    style={"paddingTop": "20px", "paddingBottom": "20px"},
-                ),
-                card,
-                html.Hr(),
+                # html.Hr(),
                 # dmc.Title(
                 #     f"Depictio",
                 #     order=2,
@@ -1794,6 +2025,15 @@ def populate_container_sample(
                         "type": "mosaicatcher-run-progress-container",
                         "index": f"{selected_run}--{selected_sample}",
                     },
+                ),
+                html.Hr(),
+                dmc.Title(
+                    f"{selected_sample} metadata",
+                    order=2,
+                    style={"paddingTop": "20px", "paddingBottom": "20px"},
+                ),
+                dbc.Spinner(
+                    children=[card], spinner_style={"width": "3rem", "height": "3rem"}
                 ),
             ]
         )
@@ -2002,7 +2242,7 @@ def generate_sidebar_stats(url):
     if url:
         print("\n\n")
         print("generating sidebar stats")
-        data = fetch_data()
+        data, timestamp = fetch_data()
         # print(data)
 
         nb_runs = len(list(data.keys()))
@@ -2057,7 +2297,7 @@ sidebar = html.Div(
             )
         ),
         html.Hr(),
-        html.Div(id="sidebar-stats"),
+        dbc.Spinner(html.Div(id="sidebar-stats")),
         # dmc.Center(
         #     dbc.Row(
         #         [
