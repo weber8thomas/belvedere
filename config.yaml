@@ -1,6 +1,7 @@
 # Data location
 data:
   genecore_data_folder: "/g/korbel/STOCKS/Data/Assay/sequencing/2023"
+  genecore_data_folder_old: "/g/korbel/shared/genecore"
   complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS"
   # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS_DEV"
   # complete_data_folder: "/scratch/tweber/DATA/MC_DATA/STOCKS/Sequencing/StrandSeq"

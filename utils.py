@@ -448,3 +448,6 @@ def generate_progress_components():
         # print(progress_bar)
         components.append(progress_bar)
     return components
+
+
+

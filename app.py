@@ -1,8 +1,9 @@
 # IMPORTS
+import glob
 from io import BytesIO
 import threading
 import collections
-import datetime
+from datetime import datetime
 import json
 import random
 import re
@@ -27,8 +28,8 @@ import plotly.express as px
 import redis
 
 from dotenv import load_dotenv
-load_dotenv()
 
+load_dotenv()
 
 
 redis_client = redis.Redis(
@@ -106,6 +107,7 @@ def fetch_data():
         response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
         response_json_complete = response.json()[0]
         timestamp = response.json()[1]
+
         # response_json_complete = response_json_complete[0].items()
         # print(response_json_complete)
 
@@ -114,6 +116,9 @@ def fetch_data():
         redis_client.set("fetch_data", json.dumps(response_json_complete), ex=60)
         redis_client.set("timestamp_fetch_data", timestamp, ex=60)
 
+    # timestamp = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+    print("TIME STAMP")
+    print(timestamp)
     print(response_json_complete, type(response_json_complete))
     response_json = collections.OrderedDict(
         # sorted(
@@ -122,12 +127,231 @@ def fetch_data():
         #     reverse=True,
         # )
     )
+
     print(response_json)
 
     # print("SORTED DICT")
     # print(response_json)
     # print(timestamp)
     return response_json, timestamp
+
+
+def extract_samples_names(l, directory_path):
+    samples = list()
+    prefixes = list()
+    plate_types = list()
+
+    pattern = re.compile(r"_lane1(.*?)(iTRU|PE20)(.*?)([A-H]?)(\d{2})(?:_1_|_2_)")
+
+    # First pass: Count occurrences of each sample_name
+    file_counts_per_sample = collections.Counter()
+    for file_path in l:
+        match = pattern.search(file_path)
+        if match:
+            sample_name = match.group(1)
+            file_counts_per_sample[sample_name] += 1
+
+    # Second pass: Process files and determine plate type per sample
+    for j, file_path in enumerate(sorted(l)):
+        match = pattern.search(file_path)
+        if match:
+            sample_name = match.group(1)
+            file_count = file_counts_per_sample[sample_name]
+
+            # Determine plate type using modulo 96 operation
+            if file_count % 96 != 0:
+                raise ValueError(
+                    f"Invalid file count for sample {sample_name} with file count {file_count}. Must be a multiple of 96."
+                )
+            plate_type = int(file_count / 2)
+
+            if (j + 1) % file_count == 0:
+                prefixes.append(match.group(2))
+                plate = directory_path.split("/")[-1]
+                samples.append(sample_name)
+                plate_types.append(plate_type)
+
+    return prefixes, samples, plate_types
+
+
+def custom_status():
+    # get progress from API
+    def get_progress():
+        FASTAPI_HOST = config["fastapi"]["host"]
+        FASTAPI_PORT = config["fastapi"]["port"]
+
+        response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-progress")
+        response_json = response.json()
+        return response_json
+
+    workflows_data_progress, last_message_timestamp = get_progress()
+
+    publishdir_location = config["data"]["data_folder"]
+    data_location = config["data"]["complete_data_folder"]
+
+    main_df = list()
+    if workflows_data_progress:
+        for workflow in workflows_data_progress["workflows"]:
+            if "--" in workflow["name"]:
+                pipeline = workflow["name"].split("--")[0]
+                run = workflow["name"].split("--")[1]
+                sample = workflow["name"].split("--")[2]
+
+                genecore_path = (
+                    config["data"]["genecore_data_folder"]
+                    if run.startswith("2023")
+                    else config["data"]["genecore_data_folder_old"]
+                )
+                directory_path = f"{genecore_path}/{run}"
+
+                report = False
+                labels = False
+                multiqc_scratch = False
+                multiqc_scratch_timestamp = None
+                remaining_days = None
+
+                if os.path.isfile(
+                    f"{publishdir_location}/{run}/{sample}/cell_selection/labels.tsv"
+                ):
+                    labels = True
+
+                if os.path.isfile(
+                    f"{publishdir_location}/{run}/{sample}/reports/{sample}_{pipeline}_report.zip"
+                ):
+                    report = True
+
+                if os.path.isfile(
+                    f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
+                ):
+                    multiqc_scratch = True
+                    multiqc_scratch_timestamp = os.path.getmtime(
+                        f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
+                    )
+                    # to datetime and then strfmtime
+                    multiqc_scratch_timestamp = datetime.fromtimestamp(
+                        multiqc_scratch_timestamp
+                    )
+                    # computing remaning days to reach 5 months between multiqc_scratch_timestamp and now
+                    remaining_days = (datetime.now() - multiqc_scratch_timestamp).days
+                    remaining_days = 150 - remaining_days
+
+                    multiqc_scratch_timestamp = multiqc_scratch_timestamp.strftime(
+                        "%Y-%m-%d"
+                    )
+
+                if not workflow:
+                    workflow = {
+                        "id": "None",
+                        "status": "None",
+                        "started_at": last_message_timestamp,
+                        "completed_at": last_message_timestamp,
+                        "jobs_done": "None",
+                        "jobs_total": "None",
+                    }
+                # else:
+                #     print(workflow)
+                #     if workflow["started_at"] is not None:
+                #         workflow["started_at"] = datetime.strptime(
+                #             workflow["started_at"],
+                #             "%a, %d %b %Y %H:%M:%S GMT",
+                #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
+                #     else:
+                #         workflow["started_at"] = last_message_timestamp
+
+                #     if workflow["completed_at"] is not None:
+                #         workflow["completed_at"] = datetime.strptime(
+                #             workflow["completed_at"],
+                #             "%a, %d %b %Y %H:%M:%S GMT",
+                #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
+                #     else:
+                #         workflow["completed_at"] = last_message_timestamp
+
+                # turn the print into a dict
+                tmp_d = {
+                    "panoptes_id": workflow["id"],
+                    "pipeline": pipeline,
+                    "run": run,
+                    "sample": sample,
+                    "report": report,
+                    "labels": labels,
+                    "multiqc_scratch": multiqc_scratch,
+                    "multiqc_scratch_timestamp": multiqc_scratch_timestamp,
+                    "remaining_days": remaining_days,
+                    "status": workflow["status"],
+                    # "prefix": list(prefixes)[0],
+                    # "plate_type": plate_type,
+                    "started_at": workflow["started_at"],
+                    "completed_at": workflow["completed_at"],
+                    "jobs_done": workflow["jobs_done"],
+                    "jobs_total": workflow["jobs_total"],
+                }
+                main_df.append(tmp_d)
+        pd.options.display.max_rows = 999
+        pd.options.display.max_colwidth = 30
+        # pd.options.display.max_columns = 50
+        main_df = pd.DataFrame(main_df)
+        print(main_df)
+        # main_df.loc[(main_df["labels"] == True) &  (main_df["report"] == True), "real_status"] = "Completed"
+        main_df.loc[
+            (main_df["labels"] == True)
+            & (main_df["report"] == False)
+            & (main_df["multiqc_scratch"] == False),
+            "real_status",
+        ] = "Report missing / /scratch still available"
+        main_df.loc[
+            (main_df["labels"] == False) & (main_df["report"] == True),
+            "real_status",
+        ] = "Error"
+        main_df.loc[
+            (main_df["labels"] == False)
+            & (main_df["report"] == False)
+            & (main_df["multiqc_scratch"] == False),
+            "real_status",
+        ] = "To process"
+
+        main_df.loc[
+            (main_df["labels"] == False)
+            & (main_df["report"] == False)
+            & (main_df["status"] != "Done"),
+            "real_status",
+        ] = "Uncompleted execution on /scratch"
+        main_df.loc[
+            (main_df["labels"] == True)
+            & (main_df["report"] == False)
+            & (main_df["multiqc_scratch"] == True),
+            "real_status",
+        ] = "Uncompleted execution on /scratch"
+        main_df.loc[
+            (main_df["labels"] == True)
+            & (main_df["report"] == True)
+            & (main_df["status"] == "None"),
+            "real_status",
+        ] = "Error"
+        main_df.loc[
+            (main_df["labels"] == True)
+            & (main_df["report"] == True)
+            & (main_df["status"] == "Running"),
+            "real_status",
+        ] = "Running"
+        main_df.loc[
+            (main_df["labels"] == True)
+            & (main_df["report"] == True)
+            & (main_df["status"] == "Done"),
+            "real_status",
+        ] = "Completed"
+
+        main_df.loc[
+            (main_df["labels"] == False)
+            & (main_df["report"] == False)
+            & (main_df["multiqc_scratch"] == True),
+            "real_status",
+        ] = "Uncompleted execution on /scratch"
+        main_df["real_status"] = main_df["real_status"].fillna(
+            "Error (to  investigate))"
+        )
+        main_df = main_df.sort_values(by=["pipeline", "run", "sample"])
+        print(main_df)
+        return main_df
 
 
 # Callback to populate the main content area based on the selected run and sample
@@ -888,9 +1112,14 @@ def generate_progress_bar(entry):
         animated = False
         striped = False
         disabled = False
-    elif progress == 100 and status in ["Missing report", "Completed but status error"]:
+    elif progress == 100 and status in ["Missing report"]:
         # elif progress < 100 and status == "Error":
         color = "orange"
+        animated = False
+        striped = False
+    elif progress == 100 and status in ["Completed but status error"]:
+        # elif progress < 100 and status == "Error":
+        color = "red"
         animated = False
         striped = False
     # elif progress < 100 and status == "Running":
@@ -918,6 +1147,68 @@ def generate_progress_bar(entry):
     )
 
     return progress_bar
+
+
+# def generate_progress_bar(entry):
+#     status = entry["real_status"]
+#     if status != "not_started":
+#         progress = round((entry["jobs_done"] / entry["jobs_total"]) * 100, 2)
+#     else:
+#         progress = 0
+
+#     color = "primary"
+#     animated = True
+#     striped = True
+#     label = ""
+
+#     label = f"{status} - {progress} %"
+
+#     if status == "Completed":
+#         progress = 100
+#         color = "success"
+#         animated = False
+#         striped = False
+#         disabled = False
+#     elif "Report missing" in status or "Uncompleted execution" in status:
+#         color = "orange"
+#         animated = False
+#         striped = False
+
+#     elif "Error (to  investigate)" in status:
+#         color = "danger"
+#         animated = False
+#         striped = False
+
+#     # elif progress == 100 and status in ["Missing report", "Completed but status error"]:
+#     #     # elif progress < 100 and status == "Error":
+#     #     color = "orange"
+#     #     animated = False
+#     #     striped = False
+#     # # elif progress < 100 and status == "Running":
+#     elif progress < 100 and status == "Running" or status == "Error":
+#         color = "primary"
+#         animated = True
+#         striped = True
+#         label = f"{progress} %"
+#     elif progress == 0 and status == "not_started":
+#         color = "grey"
+#         animated = False
+#         striped = False
+#         # print("TOTO")
+#         label = "Not Started"
+
+#     # run, sample = entry["name"].split("--")
+
+#     progress_bar = dbc.Progress(
+#         value=progress,
+#         animated=animated,
+#         striped=striped,
+#         color=color,
+#         label=label,
+#         style={"height": "30px"},
+#     )
+
+#     return progress_bar
 
 
 @app.callback(
@@ -1026,6 +1317,136 @@ def update_progress(
 
                         components.append(row)
                 return components, n_clicks
+    # print("UPDATE PROGRESS")
+    # print(n_clicks, stored_n_clicks)
+    # continue_update = False
+    # if url != "/":
+    #     raise dash.exceptions.PreventUpdate
+    #     # return dash.no_update
+    # else:
+    #     print("UPDATE PROGRESS")
+    #     print(n_clicks, stored_n_clicks)
+    #     if n_clicks is None:
+    #         raise dash.exceptions.PreventUpdate
+    #     else:
+    #         if n_clicks == 0 and stored_n_clicks == 0:
+    #             continue_update = True
+    #         else:
+    #             if n_clicks > stored_n_clicks:
+    #                 continue_update = True
+    #         if continue_update is True:
+    #             print("CONTINUE UPDATE")
+    #             print(n_clicks, stored_n_clicks)
+    #             components = []
+
+    #             data_panoptes = collections.OrderedDict(
+    #                 sorted(data_panoptes_raw.items(), reverse=True)
+    #             )
+    #             print("DATA PANOPTES")
+    #             print(data_panoptes)
+
+    #             # Generate progress bars
+    #             data_panoptes = custom_status()
+    #             if selected_run:
+    #                 data_panoptes = data_panoptes.loc[
+    #                     data_panoptes["run"].isin(selected_run)
+    #                 ]
+    #             if selected_sample:
+    #                 data_panoptes = data_panoptes.loc[
+    #                     data_panoptes["sample"].isin(selected_sample)
+    #                 ]
+
+    #             # data_panoptes = data_panoptes.loc[
+    #             #     (data_panoptes["run"].isin(selected_run))
+    #             #     & (data_panoptes["sample"].isin(selected_sample))
+    #             # ]
+
+    #             data, timestamp = fetch_data()
+
+    #             for run, samples in data.items():
+    #                 for sample in samples:
+    #                     tmp_df = data_panoptes.loc[
+    #                         (data_panoptes["run"] == run)
+    #                         & (data_panoptes["sample"] == sample)
+    #                     ]
+    #                     pipeline_progress = dict()
+
+    #                     for j, entry in tmp_df.iterrows():
+    #                         run = entry["run"]
+    #                         sample = entry["sample"]
+    #                         # for entry in data_panoptes:
+    #                         # process = True
+    #                         # if selected_run:
+    #                         #     if run not in selected_run:
+    #                         #         process = False
+    #                         # if selected_sample:
+    #                         #     if sample not in selected_sample:
+    #                         #         process = False
+    #                         # if process:
+    #                         for pipeline in [
+    #                             "ashleys-qc-pipeline",
+    #                             "mosaicatcher-pipeline",
+    #                         ]:
+    #                             print(pipeline)
+    #                             if pipeline == entry["pipeline"]:
+    #                                 pipeline_progress[pipeline] = generate_progress_bar(
+    #                                     entry
+    #                                 )
+    #                             else:
+    #                                 pipeline_progress[pipeline] = generate_progress_bar(
+    #                                     {"real_status": "not_started"}
+    #                                 )
+    #                             # pipeline_progress[pipeline] = generate_progress_bar(
+    #                             #     data_panoptes[entry][pipeline]
+    #                             #     # data_panoptes[entry][pipeline]
+    #                             # )
+    #                     print(pipeline_progress)
+
+    #                     row = dbc.Row(
+    #                         [
+    #                             dbc.Col(
+    #                                 [
+    #                                     dmc.Text(
+    #                                         run,
+    #                                         size="lg",
+    #                                         weight=400,
+    #                                     ),
+    #                                 ],
+    #                                 width=3,
+    #                             ),
+    #                             dbc.Col(
+    #                                 [
+    #                                     dcc.Link(
+    #                                         [
+    #                                             dmc.Text(
+    #                                                 sample,
+    #                                                 size="lg",
+    #                                                 weight=400,
+    #                                             )
+    #                                         ],
+    #                                         href=f"/{run}/{sample}",
+    #                                         style={
+    #                                             "color": "black",
+    #                                             "text-decoration": "none",
+    #                                         },
+    #                                     ),
+    #                                 ],
+    #                                 width=3,
+    #                             ),
+    #                             dbc.Col(
+    #                                 pipeline_progress["ashleys-qc-pipeline"],
+    #                                 width=3,
+    #                             ),
+    #                             dbc.Col(
+    #                                 pipeline_progress["mosaicatcher-pipeline"],
+    #                                 width=3,
+    #                             ),
+    #                         ],
+    #                         style={"height": "40px"},
+    #                     )
+
+    #                     components.append(row)
+    #             return components, n_clicks
 
 
 @app.callback(

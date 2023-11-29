@@ -57,6 +57,7 @@ def get_files_structure(root_folder):
         if matches:
             print("OK")
             for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
+                print(sample_folder)
                 if sample_folder not in unwanted:
                     sample_name = sample_folder
                     data_dict[run_name].append(sample_name)
@@ -65,7 +66,9 @@ def get_files_structure(root_folder):
 
 
 def publish_to_rabbitmq(data=dict, exchange=str, queue=str, routing_key=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"]))
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"])
+    )
     channel = connection.channel()
 
     # Declare a topic exchange
@@ -79,7 +82,9 @@ def publish_to_rabbitmq(data=dict, exchange=str, queue=str, routing_key=str):
     channel.queue_bind(exchange=exchange, queue=queue, routing_key=routing_key)
 
     # Fetch the current timestamp
-    current_timestamp = int(datetime.datetime.now().timestamp() * 1000)  # Current time in milliseconds
+    current_timestamp = int(
+        datetime.datetime.now().timestamp() * 1000
+    )  # Current time in milliseconds
 
     # Publish the message to the exchange with the 'latest_status' routing key
     channel.basic_publish(
