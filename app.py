@@ -38,7 +38,12 @@ redis_client = redis.Redis(
     db=0,
 )
 
+# TODO : Move to function to allow data loading on page refresh
 df = pd.read_parquet("strandscape_vizu_dev.parquet")
+# TODO: remove, for temp dev
+
+df = df.loc[df["depictio_run_id"].str.contains("2023")]
+print(df)
 df["prediction"] = df["prediction"].astype(str)
 
 
@@ -129,6 +134,7 @@ def fetch_data():
     )
 
     print(response_json)
+    response_json = {k: v for k, v in response_json.items() if "2023" in k}
 
     # print("SORTED DICT")
     # print(response_json)
@@ -352,6 +358,17 @@ def custom_status():
         main_df = main_df.sort_values(by=["pipeline", "run", "sample"])
         print(main_df)
         return main_df
+
+
+data_panoptes_custom_status = custom_status()
+data_panoptes_custom_status["name"] = data_panoptes_custom_status.apply(
+    lambda r: "--".join([r["pipeline"], r["run"], r["sample"]]), axis=1
+)
+print("data_panoptes_custom_status")
+data_panoptes_custom_status = data_panoptes_custom_status.set_index("name").to_dict(
+    "index"
+)
+print(data_panoptes_custom_status)
 
 
 # Callback to populate the main content area based on the selected run and sample
@@ -1107,11 +1124,16 @@ def generate_progress_bar(entry):
 
     label = f"{status} - {progress} %"
 
+    # if data_panoptes_custom_status[entry["name"]]:
+    #     if data_panoptes_custom_status[entry["name"]]["real_status"] == "Completed":
     if progress == 100 and status == "Done":
         color = "success"
         animated = False
         striped = False
         disabled = False
+        # label = (
+        #     f'{data_panoptes_custom_status[entry["name"]]["real_status"]} - {progress}'
+        # )
     elif progress == 100 and status in ["Missing report"]:
         # elif progress < 100 and status == "Error":
         color = "orange"
@@ -1134,6 +1156,12 @@ def generate_progress_bar(entry):
         striped = False
         # print("TOTO")
         label = "Not Started"
+    # else:
+    #     color = "grey"
+    #     animated = False
+    #     striped = False
+    #     # print("TOTO")
+    #     label = "Not Started"
 
     # run, sample = entry["name"].split("--")
 
@@ -1169,6 +1197,7 @@ def generate_progress_bar(entry):
 #         animated = False
 #         striped = False
 #         disabled = False
+#         label = "Completed"
 #     elif "Report missing" in status or "Uncompleted execution" in status:
 #         color = "orange"
 #         animated = False
@@ -1317,136 +1346,133 @@ def update_progress(
 
                         components.append(row)
                 return components, n_clicks
-    # print("UPDATE PROGRESS")
-    # print(n_clicks, stored_n_clicks)
-    # continue_update = False
-    # if url != "/":
-    #     raise dash.exceptions.PreventUpdate
-    #     # return dash.no_update
-    # else:
-    #     print("UPDATE PROGRESS")
-    #     print(n_clicks, stored_n_clicks)
-    #     if n_clicks is None:
-    #         raise dash.exceptions.PreventUpdate
-    #     else:
-    #         if n_clicks == 0 and stored_n_clicks == 0:
-    #             continue_update = True
-    #         else:
-    #             if n_clicks > stored_n_clicks:
-    #                 continue_update = True
-    #         if continue_update is True:
-    #             print("CONTINUE UPDATE")
-    #             print(n_clicks, stored_n_clicks)
-    #             components = []
 
-    #             data_panoptes = collections.OrderedDict(
-    #                 sorted(data_panoptes_raw.items(), reverse=True)
-    #             )
-    #             print("DATA PANOPTES")
-    #             print(data_panoptes)
 
-    #             # Generate progress bars
-    #             data_panoptes = custom_status()
-    #             if selected_run:
-    #                 data_panoptes = data_panoptes.loc[
-    #                     data_panoptes["run"].isin(selected_run)
-    #                 ]
-    #             if selected_sample:
-    #                 data_panoptes = data_panoptes.loc[
-    #                     data_panoptes["sample"].isin(selected_sample)
-    #                 ]
+# print("UPDATE PROGRESS")
+# print(n_clicks, stored_n_clicks)
+# continue_update = False
+# if url != "/":
+#     raise dash.exceptions.PreventUpdate
+#     # return dash.no_update
+# else:
+#     print("UPDATE PROGRESS")
+#     print(n_clicks, stored_n_clicks)
+#     if n_clicks is None:
+#         raise dash.exceptions.PreventUpdate
+#     else:
+#         if n_clicks == 0 and stored_n_clicks == 0:
+#             continue_update = True
+#         else:
+#             if n_clicks > stored_n_clicks:
+#                 continue_update = True
+#         if continue_update is True:
+#             print("CONTINUE UPDATE")
+#             print(n_clicks, stored_n_clicks)
+#             components = []
 
-    #             # data_panoptes = data_panoptes.loc[
-    #             #     (data_panoptes["run"].isin(selected_run))
-    #             #     & (data_panoptes["sample"].isin(selected_sample))
-    #             # ]
+#             data_panoptes = collections.OrderedDict(
+#                 sorted(data_panoptes_raw.items(), reverse=True)
+#             )
+#             print("DATA PANOPTES")
+#             print(data_panoptes)
 
-    #             data, timestamp = fetch_data()
+#             # Generate progress bars
+#             data_panoptes = custom_status()
+#             if selected_run:
+#                 data_panoptes = data_panoptes.loc[
+#                     data_panoptes["run"].isin(selected_run)
+#                 ]
+#             if selected_sample:
+#                 data_panoptes = data_panoptes.loc[
+#                     data_panoptes["sample"].isin(selected_sample)
+#                 ]
 
-    #             for run, samples in data.items():
-    #                 for sample in samples:
-    #                     tmp_df = data_panoptes.loc[
-    #                         (data_panoptes["run"] == run)
-    #                         & (data_panoptes["sample"] == sample)
-    #                     ]
-    #                     pipeline_progress = dict()
+#             # data_panoptes = data_panoptes.loc[
+#             #     (data_panoptes["run"].isin(selected_run))
+#             #     & (data_panoptes["sample"].isin(selected_sample))
+#             # ]
 
-    #                     for j, entry in tmp_df.iterrows():
-    #                         run = entry["run"]
-    #                         sample = entry["sample"]
-    #                         # for entry in data_panoptes:
-    #                         # process = True
-    #                         # if selected_run:
-    #                         #     if run not in selected_run:
-    #                         #         process = False
-    #                         # if selected_sample:
-    #                         #     if sample not in selected_sample:
-    #                         #         process = False
-    #                         # if process:
-    #                         for pipeline in [
-    #                             "ashleys-qc-pipeline",
-    #                             "mosaicatcher-pipeline",
-    #                         ]:
-    #                             print(pipeline)
-    #                             if pipeline == entry["pipeline"]:
-    #                                 pipeline_progress[pipeline] = generate_progress_bar(
-    #                                     entry
-    #                                 )
-    #                             else:
-    #                                 pipeline_progress[pipeline] = generate_progress_bar(
-    #                                     {"real_status": "not_started"}
-    #                                 )
-    #                             # pipeline_progress[pipeline] = generate_progress_bar(
-    #                             #     data_panoptes[entry][pipeline]
-    #                             #     # data_panoptes[entry][pipeline]
-    #                             # )
-    #                     print(pipeline_progress)
+#             data, timestamp = fetch_data()
+#             print("DATA")
+#             print(data)
 
-    #                     row = dbc.Row(
-    #                         [
-    #                             dbc.Col(
-    #                                 [
-    #                                     dmc.Text(
-    #                                         run,
-    #                                         size="lg",
-    #                                         weight=400,
-    #                                     ),
-    #                                 ],
-    #                                 width=3,
-    #                             ),
-    #                             dbc.Col(
-    #                                 [
-    #                                     dcc.Link(
-    #                                         [
-    #                                             dmc.Text(
-    #                                                 sample,
-    #                                                 size="lg",
-    #                                                 weight=400,
-    #                                             )
-    #                                         ],
-    #                                         href=f"/{run}/{sample}",
-    #                                         style={
-    #                                             "color": "black",
-    #                                             "text-decoration": "none",
-    #                                         },
-    #                                     ),
-    #                                 ],
-    #                                 width=3,
-    #                             ),
-    #                             dbc.Col(
-    #                                 pipeline_progress["ashleys-qc-pipeline"],
-    #                                 width=3,
-    #                             ),
-    #                             dbc.Col(
-    #                                 pipeline_progress["mosaicatcher-pipeline"],
-    #                                 width=3,
-    #                             ),
-    #                         ],
-    #                         style={"height": "40px"},
-    #                     )
+#             for run, samples in sorted(data.items(), reverse=True):
+#                 for sample in samples:
+#                     pipeline_progress = dict()
 
-    #                     components.append(row)
-    #             return components, n_clicks
+#                     for pipeline in [
+#                         "ashleys-qc-pipeline",
+#                         "mosaicatcher-pipeline",
+#                     ]:
+#                         tmp_df = data_panoptes.loc[
+#                             (data_panoptes["run"] == run)
+#                             & (data_panoptes["sample"] == sample)
+#                             # & (data_panoptes["pipeline"] == pipeline)
+#                         ]
+#                         print(run, sample, pipeline)
+
+#                         print(tmp_df)
+#                         if pipeline in tmp_df.pipeline.values.tolist():
+#                             for j, entry in tmp_df.iterrows():
+#                                 run = entry["run"]
+#                                 sample = entry["sample"]
+
+#                                 if pipeline == entry["pipeline"]:
+#                                     pipeline_progress[
+#                                         pipeline
+#                                     ] = generate_progress_bar(entry)
+#                         else:
+#                             pipeline_progress[pipeline] = generate_progress_bar(
+#                                 {"real_status": "not_started"}
+#                             )
+
+#                     print(pipeline_progress)
+
+#                     row = dbc.Row(
+#                         [
+#                             dbc.Col(
+#                                 [
+#                                     dmc.Text(
+#                                         run,
+#                                         size="lg",
+#                                         weight=400,
+#                                     ),
+#                                 ],
+#                                 width=3,
+#                             ),
+#                             dbc.Col(
+#                                 [
+#                                     dcc.Link(
+#                                         [
+#                                             dmc.Text(
+#                                                 sample,
+#                                                 size="lg",
+#                                                 weight=400,
+#                                             )
+#                                         ],
+#                                         href=f"/{run}/{sample}",
+#                                         style={
+#                                             "color": "black",
+#                                             "text-decoration": "none",
+#                                         },
+#                                     ),
+#                                 ],
+#                                 width=3,
+#                             ),
+#                             dbc.Col(
+#                                 pipeline_progress["ashleys-qc-pipeline"],
+#                                 width=3,
+#                             ),
+#                             dbc.Col(
+#                                 pipeline_progress["mosaicatcher-pipeline"],
+#                                 width=3,
+#                             ),
+#                         ],
+#                         style={"height": "40px"},
+#                     )
+
+#                     components.append(row)
+#             return components, n_clicks
 
 
 @app.callback(
@@ -1533,6 +1559,8 @@ def update_progress(url, progress_store):
         run, sample = url.split("/")[1:3]
 
         if progress_store != {}:
+            print("PROGRESS STORE")
+            print(progress_store)
             progress_bar = generate_progress_bar(
                 progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]
             )
@@ -1614,6 +1642,7 @@ def violinplot_context(run, sample):
             line_dash="dash",
             line_color="red",
         )
+        fig.update_layout(yaxis_range=[0, 2e6])
 
         figure = dcc.Graph(figure=fig, style={"height": "50vh"})
         return figure
