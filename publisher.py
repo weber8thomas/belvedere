@@ -134,4 +134,4 @@ if __name__ == "__main__":
         )
 
         # Fetch every 30 seconds
-        time.sleep(30)
+        time.sleep(25)

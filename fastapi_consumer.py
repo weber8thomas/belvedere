@@ -28,7 +28,9 @@ def load_from_json(filename: str):
 
 
 def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"]))
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(config["rabbitmq_general_settings"]["hostname"])
+    )
     channel = connection.channel()
 
     # Fetch the message without auto acknowledgment
@@ -36,16 +38,18 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
 
     if method_frame:
         # Extract the timestamp from the header frame
-        if header_frame.timestamp:
-            timestamp = header_frame.timestamp
-            human_readable_timestamp = datetime.datetime.fromtimestamp(timestamp / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+        # if header_frame.timestamp:
+        timestamp = header_frame.timestamp
+        human_readable_timestamp = datetime.datetime.fromtimestamp(
+            timestamp / 1000.0
+        ).strftime("%Y-%m-%d %H:%M:%S")
 
-        else:
-            timestamp = None
+        # else:
+        #     timestamp = None
         # Convert timestamp to human-readable format if necessary
 
         # # Acknowledge the message after processing
-        # channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
         connection.close()
         data = json.loads(body.decode("utf-8"))
         if data == {} and os.path.exists(json_backup_filename):
@@ -53,7 +57,9 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
             print("Loading from JSON file...")
             data_json = load_from_json(filename=json_backup_filename)
             file_timestamp = os.path.getmtime(json_backup_filename)
-            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             return data_json, file_timestamp
         else:
             print("RabbitMQ queue NOT empty and message is NOT empty")
@@ -66,7 +72,9 @@ def consume_last_message_from_rabbitmq(json_backup_filename=str, queue=str):
             print("Loading from JSON file...")
             data_json = load_from_json(filename=json_backup_filename)
             file_timestamp = os.path.getmtime(json_backup_filename)
-            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            file_timestamp = datetime.datetime.fromtimestamp(file_timestamp).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
             return data_json, file_timestamp
         else:
@@ -117,12 +125,21 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         print("Running command: %s", " ".join(cmd + profile_dry_run + dry_run_options))
 
         # Complete environment
-        snakemake_binary_folder = "/".join(config["snakemake"]["binary"].split("/")[:-1])
+        snakemake_binary_folder = "/".join(
+            config["snakemake"]["binary"].split("/")[:-1]
+        )
         my_env = os.environ.copy()
         my_env["PATH"] = f"{snakemake_binary_folder}:{my_env['PATH']}"
 
-        print(f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json")
-        stranscape_json = json.load(open(f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json", "r"))
+        print(
+            f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json"
+        )
+        stranscape_json = json.load(
+            open(
+                f"{publishdir_location}/{date_folder}/{sample_name}/config/strandscape.json",
+                "r",
+            )
+        )
         cell = stranscape_json["stored-selectedRows"][0]["cell"]
 
         # cmd = cmd[:-2] + [
@@ -258,7 +275,9 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
         # os.makedirs(os.path.dirname(report_location), exist_ok=True)
 
         # os.makedirs(f"{publishdir_location}/{date_folder}/{sample}/reports/", exist_ok=True)
-        logging.info("Running command: %s", " ".join(cmd + profile_slurm + report_options))
+        logging.info(
+            "Running command: %s", " ".join(cmd + profile_slurm + report_options)
+        )
 
         # Change the permissions of the new directory
         # subprocess.run(["chmod", "-R", "777", f"{data_location}/{date_folder}"])
@@ -312,8 +331,14 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
     data_location = config["data"]["complete_data_folder"]
     publishdir_location = config["data"]["data_folder"]
     # profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/dev/slurm_legacy_conda/"]
-    profile_slurm = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/HPC/slurm_EMBL/"]
-    profile_dry_run = ["--profile", "/g/korbel2/weber/workspace/snakemake_profiles/local/conda/"]
+    profile_slurm = [
+        "--profile",
+        "/g/korbel2/weber/workspace/snakemake_profiles/HPC/slurm_EMBL/",
+    ]
+    profile_dry_run = [
+        "--profile",
+        "/g/korbel2/weber/workspace/snakemake_profiles/local/conda/",
+    ]
     dry_run_options = ["-c", "1", "-n", "-q"]
     snakemake_binary = config["snakemake"]["binary"]
     # snakemake_binary = "/Users/tweber/miniconda3/envs/snakemake_latest/bin/snakemake"
@@ -406,7 +431,9 @@ def trigger_snakemake(run_id: str, snake_args: dict = Body(...)):
 @app.get("/reports/{run}--{sample}/{pipeline}/report.html")
 def serve_report(pipeline: str, run: str, sample: str):
     data_folder = config["data"]["data_folder"]
-    file_path = f"{data_folder}/{run}/{sample}/reports/{sample}_{pipeline}_report/report.html"
+    file_path = (
+        f"{data_folder}/{run}/{sample}/reports/{sample}_{pipeline}_report/report.html"
+    )
     print(file_path)
 
     # Check if the file exists
@@ -423,7 +450,9 @@ def serve_report_resources(pipeline: str, run: str, sample: str, resource_path: 
     print(file_path)
 
     # Check if the file exists
-    if os.path.exists(file_path) and os.path.isfile(file_path):  # Make sure it's a file and not a directory
+    if os.path.exists(file_path) and os.path.isfile(
+        file_path
+    ):  # Make sure it's a file and not a directory
         if file_path.endswith(".html"):
             return FileResponse(file_path, media_type="text/html")
         # Add more conditions for other file types if necessary
