@@ -39,12 +39,12 @@ redis_client = redis.Redis(
 )
 
 # TODO : Move to function to allow data loading on page refresh
-df = pd.read_parquet("strandscape_vizu_dev.parquet")
-# TODO: remove, for temp dev
+# df = pd.read_parquet("strandscape_vizu_dev.parquet")
+# # TODO: remove, for temp dev
 
-df = df.loc[df["depictio_run_id"].str.contains("2023")]
-print(df)
-df["prediction"] = df["prediction"].astype(str)
+# df = df.loc[df["depictio_run_id"].str.contains("2023")]
+# print(df)
+# df["prediction"] = df["prediction"].astype(str)
 
 
 VALID_USERNAME_PASSWORD_PAIRS = {
@@ -650,6 +650,7 @@ def fill_sample_wise_container(url):
                             disabled=True,
                             size="sm",
                             leftIcon=DashIconify(icon="ooui:logo-wikimedia-discovery"),
+                            style={"display": "none"},
                         ),
                         dmc.Button(
                             "Display MosaiCatcher report",
@@ -663,6 +664,7 @@ def fill_sample_wise_container(url):
                             disabled=True,
                             size="sm",
                             leftIcon=DashIconify(icon="mdi:eye"),
+                            style={"display": "none"},
                         ),
                     ],
                 )
@@ -791,7 +793,7 @@ def update_progress(url):
                     # size="md",
                 )
             ],
-            width=3,
+            width=4,
         ),
         dbc.Col(
             [
@@ -809,13 +811,14 @@ def update_progress(url):
                     clearable=True,
                 ),
             ],
-            width=3,
+            width=4,
         ),
-        dbc.Col(width=3),
-        dbc.Col(width=3),
+        dbc.Col(width=4),
+        # dbc.Col(width=3),
     ]
 
-    headers = ["Run", "Sample", "Ashleys-QC progress", "MosaiCatcher progress"]
+    headers = ["Run", "Sample", "Ashleys-QC progress"]
+    # headers = ["Run", "Sample", "Ashleys-QC progress", "MosaiCatcher progress"]
     headers_components = [
         dbc.Col(
             [
@@ -826,7 +829,7 @@ def update_progress(url):
                     style={"paddingBottom": "10px"},
                 ),
             ],
-            width=3,
+            width=4,
             style={
                 "text-align": "center",
             },
@@ -1093,19 +1096,19 @@ def disable_report_button(url, progress_store, store_save_button):
         print("disable_report_button")
         print(run, sample, progress_store[f"{run}--{sample}"])
         print(store_save_button)
-        if (
-            progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"]
-            == "Done"
-        ):
-            return False, True
-        else:
-            if (
-                progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
-                == "Done"
-            ):
-                return True, store_save_button["run_mosaicatcher_disabled"]
-            else:
-                return True, True
+        # if (
+        #     progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]["status"]
+        #     == "Done"
+        # ):
+        #     return False, True
+        # else:
+        #     if (
+        #         progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
+        #         == "Done"
+        #     ):
+        #         return True, store_save_button["run_mosaicatcher_disabled"]
+        #     else:
+        return True, True
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -1295,7 +1298,7 @@ def update_progress(
                         pipeline_progress = dict()
                         for pipeline in [
                             "ashleys-qc-pipeline",
-                            "mosaicatcher-pipeline",
+                            # "mosaicatcher-pipeline",
                         ]:
                             pipeline_progress[pipeline] = generate_progress_bar(
                                 data_panoptes[entry][pipeline]
@@ -1311,7 +1314,7 @@ def update_progress(
                                             weight=400,
                                         ),
                                     ],
-                                    width=3,
+                                    width=4,
                                 ),
                                 dbc.Col(
                                     [
@@ -1330,16 +1333,16 @@ def update_progress(
                                             },
                                         ),
                                     ],
-                                    width=3,
+                                    width=4,
                                 ),
                                 dbc.Col(
                                     pipeline_progress["ashleys-qc-pipeline"],
-                                    width=3,
+                                    width=4,
                                 ),
-                                dbc.Col(
-                                    pipeline_progress["mosaicatcher-pipeline"],
-                                    width=3,
-                                ),
+                                # dbc.Col(
+                                #     pipeline_progress["mosaicatcher-pipeline"],
+                                #     width=3,
+                                # ),
                             ],
                             style={"height": "40px"},
                         )
@@ -1519,7 +1522,8 @@ def update_progress(url, progress_store):
     # data_panoptes = {wf["name"]: wf for wf in data_panoptes}
 
     for run_sample in data_lite:
-        for pipeline in ["ashleys-qc-pipeline", "mosaicatcher-pipeline"]:
+        for pipeline in ["ashleys-qc-pipeline"]:
+            # for pipeline in ["ashleys-qc-pipeline", "mosaicatcher-pipeline"]:
             if pipeline not in data_panoptes[run_sample]:
                 data_panoptes[run_sample][pipeline] = {
                     "name": run_sample,
@@ -1539,7 +1543,9 @@ def update_progress(url, progress_store):
     # response_json = response_json_complete[0]
     # timestamp_data = response_json_complete[1]
 
-    timestamp_data = dmc.Text(f"Last data update: {timestamp}", size="xs")
+    timestamp_data = dmc.Text(
+        f"Last data update: {timestamp.decode('utf-8')}", size="xs"
+    )
     timestamp_progress = dmc.Text(
         f"Last progress update: {timestamp_progress}", size="xs"
     )
@@ -1570,28 +1576,28 @@ def update_progress(url, progress_store):
         return progress_bar
 
 
-@app.callback(
-    Output({"type": "mosaicatcher-run-progress-container", "index": MATCH}, "children"),
-    Input("url", "pathname"),
-    State("stored-progress", "data"),
-)
-def update_progress(url, progress_store):
-    if url == "/":
-        return dash.no_update
-    else:
-        run, sample = url.split("/")[1:3]
-        # print("\n\n")
-        # print(progress_store)
-        # print("\n\n")
+# @app.callback(
+#     Output({"type": "mosaicatcher-run-progress-container", "index": MATCH}, "children"),
+#     Input("url", "pathname"),
+#     State("stored-progress", "data"),
+# )
+# def update_progress(url, progress_store):
+#     if url == "/":
+#         return dash.no_update
+#     else:
+#         run, sample = url.split("/")[1:3]
+#         # print("\n\n")
+#         # print(progress_store)
+#         # print("\n\n")
 
-        if progress_store != {}:
-            progress_bar = generate_progress_bar(
-                progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
-            )
+#         if progress_store != {}:
+#             progress_bar = generate_progress_bar(
+#                 progress_store[f"{run}--{sample}"]["mosaicatcher-pipeline"]
+#             )
 
-        else:
-            progress_bar = generate_progress_bar({"status": "not_started"})
-        return progress_bar
+#         else:
+#             progress_bar = generate_progress_bar({"status": "not_started"})
+#         return progress_bar
 
 
 def violinplot_context(run, sample):
@@ -1817,23 +1823,23 @@ def fill_metadata_container(url, n_clicks, progress_store):
 
         # Later, when you need to retrieve the figure
 
-        violin_plot = violinplot_context(run, sample)
+        # violin_plot = violinplot_context(run, sample)
 
-        cell_distribution_plot = cell_distribution(run, sample)
+        # cell_distribution_plot = cell_distribution(run, sample)
 
-        box_dupl_plot = bar_dupl(run, sample)
+        # box_dupl_plot = bar_dupl(run, sample)
 
-        row = dbc.Row(
-            [
-                dbc.Col(
-                    [dmc.Title("Sample context", order=3), cell_distribution_plot],
-                    width=6,
-                ),
-                dbc.Col(
-                    [dmc.Title("Duplication level", order=3), box_dupl_plot], width=6
-                ),
-            ]
-        )
+        # row = dbc.Row(
+        #     [
+        #         dbc.Col(
+        #             [dmc.Title("Sample context", order=3), cell_distribution_plot],
+        #             width=6,
+        #         ),
+        #         dbc.Col(
+        #             [dmc.Title("Duplication level", order=3), box_dupl_plot], width=6
+        #         ),
+        #     ]
+        # )
 
         # figure = dcc.Graph(figure=px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16]))
         # export that figure into redis and then load it from redis
@@ -1877,11 +1883,11 @@ def fill_metadata_container(url, n_clicks, progress_store):
 
         return [
             card,
-            html.Hr(),
-            dmc.Title("Visualisation", order=2),
-            dmc.Title("Global context", order=3),
-            violin_plot,
-            row,
+            # html.Hr(),
+            # dmc.Title("Visualisation", order=2),
+            # dmc.Title("Global context", order=3),
+            # violin_plot,
+            # row,
             html.Hr(),
         ]
 
@@ -2468,18 +2474,18 @@ def populate_container_sample(
                         "index": f"{selected_run}--{selected_sample}",
                     },
                 ),
-                html.Hr(),
-                dmc.Title(
-                    "MosaiCatcher run",
-                    order=2,
-                    style={"paddingTop": "20px", "paddingBottom": "20px"},
-                ),
-                html.Div(
-                    id={
-                        "type": "mosaicatcher-run-progress-container",
-                        "index": f"{selected_run}--{selected_sample}",
-                    },
-                ),
+                # html.Hr(),
+                # dmc.Title(
+                #     "MosaiCatcher run",
+                #     order=2,
+                #     style={"paddingTop": "20px", "paddingBottom": "20px"},
+                # ),
+                # html.Div(
+                #     id={
+                #         "type": "mosaicatcher-run-progress-container",
+                #         "index": f"{selected_run}--{selected_sample}",
+                #     },
+                # ),
                 html.Hr(),
                 dmc.Title(
                     f"{selected_sample} metadata",
@@ -2643,7 +2649,10 @@ def populate_container_sample(
                                                     disabled=False,
                                                     n_clicks=0,
                                                     className="mt-3",
-                                                    style={"width": "auto"},
+                                                    style={
+                                                        "width": "auto",
+                                                        "display": "none",
+                                                    },
                                                     size="xl",
                                                     radius="xl",
                                                     leftIcon=DashIconify(
