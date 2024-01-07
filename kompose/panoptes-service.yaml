@@ -8,8 +8,10 @@ metadata:
   labels:
     io.kompose.service: panoptes
   name: panoptes
-  namespace: default
+  namespace: tenant-panoptes-service
 spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
   ports:
     - name: "8058"
       port: 8058

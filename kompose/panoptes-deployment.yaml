@@ -8,7 +8,7 @@ metadata:
   labels:
     io.kompose.service: panoptes
   name: panoptes
-  namespace: default
+  namespace: tenant-panoptes-service
 spec:
   replicas: 1
   selector:
@@ -34,15 +34,28 @@ spec:
             - "8058"
           image: quay.io/biocontainers/panoptes-ui:0.2.3--pyh7cba7a3_0
           name: panoptes
+          imagePullPolicy: Always  # Add this line
           ports:
             - containerPort: 8058
-              hostPort: 8058
-              protocol: TCP
-          resources: {}
+          resources:
+            requests:
+              cpu: "500m"  # Example CPU request
+              memory: "256Mi"  # Example memory request
+            limits:
+              cpu: "1"  # Example CPU limit
+              memory: "512Mi"  # Example memory limit
+
           volumeMounts:
-            - mountPath: .
+            - mountPath: /data
               name: panoptes-claim0
-      restartPolicy: Always
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: panoptes-claim0
           persistentVolumeClaim:
