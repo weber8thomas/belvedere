@@ -39,12 +39,12 @@ redis_client = redis.Redis(
 )
 
 # TODO : Move to function to allow data loading on page refresh
-# df = pd.read_parquet("strandscape_vizu_dev.parquet")
-# # TODO: remove, for temp dev
+df = pd.read_parquet("strandscape_vizu_dev.parquet")
+# TODO: remove, for temp dev
 
-# df = df.loc[df["depictio_run_id"].str.contains("2023")]
-# print(df)
-# df["prediction"] = df["prediction"].astype(str)
+df = df.loc[df["depictio_run_id"].str.contains("2023|2024")]
+print(df)
+df["prediction"] = df["prediction"].astype(str)
 
 
 VALID_USERNAME_PASSWORD_PAIRS = {
@@ -371,6 +371,20 @@ data_panoptes_custom_status = data_panoptes_custom_status.set_index("name").to_d
 print(data_panoptes_custom_status)
 
 
+@app.callback(
+    Output({"type": "embl-login", "index": MATCH}, "error"),
+    Output({"type": "save-button", "index": MATCH}, "disabled"),
+    Input({"type": "embl-login", "index": MATCH}, "value"),
+)
+def validate_username(username):
+    if username is None or username == "":
+        return True, True
+    elif username.isalpha():
+        return False, False
+    else:
+        return True, True
+
+
 # Callback to populate the main content area based on the selected run and sample
 @app.callback(
     Output("output-container", "children"),
@@ -446,6 +460,21 @@ def fill_sample_wise_container(url):
             # Create an offcanvas (side panel) for cell selection
             offcanvas = dbc.Offcanvas(
                 [
+                    dbc.Row(
+                        dmc.Center(
+                            dmc.TextInput(
+                                id={
+                                    "type": "embl-login",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                label="Your EMBL login",
+                                style={"width": 200},
+                                placeholder="Your EMBL login",
+                                icon=DashIconify(icon="uiw:login"),
+                            )
+                        )
+                    ),
+                    html.Hr(),
                     dbc.Row(datatable),
                     dbc.Row(
                         [
@@ -613,7 +642,8 @@ def fill_sample_wise_container(url):
                             leftIcon=DashIconify(icon="mdi:home"),
                         ),
                         dmc.Button(
-                            "Display Ashleys-QC report",
+                            "Display report",
+                            # "Display Ashleys-QC report",
                             id={
                                 "type": "report-button-ashleys",
                                 "index": f"{selected_run}--{selected_sample}",
@@ -817,7 +847,7 @@ def update_progress(url):
         # dbc.Col(width=3),
     ]
 
-    headers = ["Run", "Sample", "Ashleys-QC progress"]
+    headers = ["Run", "Sample", "Pipeline completion"]
     # headers = ["Run", "Sample", "Ashleys-QC progress", "MosaiCatcher progress"]
     headers_components = [
         dbc.Col(
@@ -899,6 +929,7 @@ def set_sample_options(selected_run):
         State({"type": "stored-save-button", "index": MATCH}, "data"),
         State({"type": "stored-selectedRows", "index": MATCH}, "data"),
         State({"type": "stored-refresh-button-samplewise", "index": MATCH}, "data"),
+        State({"type": "embl-login", "index": MATCH}, "value"),
     ],
 )
 def save_selected_rows_and_disable_redirect_button(
@@ -910,6 +941,7 @@ def save_selected_rows_and_disable_redirect_button(
     stored_save_button,
     stored_selected_rows,
     stored_refresh_button_samplewise,
+    user,
 ):
     if url != "/":
         print(n_clicks_refresh, stored_refresh_button_samplewise)
@@ -925,11 +957,9 @@ def save_selected_rows_and_disable_redirect_button(
             raise dash.exceptions.PreventUpdate
         else:
             run, sample = url.split("/")[1:3]
-            processed_df_path = (
-                f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
-            )
+            processed_df_path = f"{root_folder}/{run}/{sample}/cell_selection/labels_strandscape-{user}.tsv"
             complete_data_folder = config["data"]["complete_data_folder"]
-            processed_df_path_scratch = f"{complete_data_folder}/{run}/{sample}/cell_selection/labels_strandscape.tsv"
+            processed_df_path_scratch = f"{complete_data_folder}/{run}/{sample}/cell_selection/labels_strandscape-{user}.tsv"
             os.makedirs(os.path.dirname(processed_df_path_scratch), exist_ok=True)
             print(processed_df_path)
             print(processed_df_path_scratch)
@@ -966,6 +996,8 @@ def save_selected_rows_and_disable_redirect_button(
                     processed_df = processed_df.sort_values(by="cell").reset_index(
                         drop=True
                     )
+
+                    processed_df["cell"] = processed_df["cell"] + ".sort.mdup.bam"
 
                     processed_df.to_csv(processed_df_path, sep="\t", index=False)
                     processed_df.to_csv(
@@ -1679,7 +1711,7 @@ def bar_dupl(run, sample):
             # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
 
             fig = px.bar(
-                df.loc[df["sample"] == sample],
+                df.loc[df["sample"] == sample].sort_values(by="cell"),
                 x="cell",
                 y="dupl",
                 color="prediction",
@@ -1688,6 +1720,8 @@ def bar_dupl(run, sample):
                 hover_data=["depictio_run_id", "sample", "cell", "good", "dupl"],
                 # points="all",
             )
+
+            fig.update_layout(xaxis_categoryorder="category ascending")
 
             # Serialize the figure to JSON
             figure_json = plotly.io.to_json(fig)
@@ -1726,7 +1760,7 @@ def cell_distribution(run, sample):
             # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
 
             fig = px.scatter(
-                df.loc[df["sample"] == sample],
+                df.loc[df["sample"] == sample].sort_values(by="cell"),
                 x="cell",
                 y="good",
                 color="prediction",
@@ -1742,7 +1776,9 @@ def cell_distribution(run, sample):
                 ],
             )
 
-            fig.update_layout(yaxis_type="log")
+            fig.update_layout(
+                yaxis_type="log", xaxis_categoryorder="category ascending"
+            )
             fig.update_traces(marker=dict(size=10))  # Change 12 to your desired size
 
             # Serialize the figure to JSON
@@ -1823,23 +1859,23 @@ def fill_metadata_container(url, n_clicks, progress_store):
 
         # Later, when you need to retrieve the figure
 
-        # violin_plot = violinplot_context(run, sample)
+        violin_plot = violinplot_context(run, sample)
 
-        # cell_distribution_plot = cell_distribution(run, sample)
+        cell_distribution_plot = cell_distribution(run, sample)
 
-        # box_dupl_plot = bar_dupl(run, sample)
+        box_dupl_plot = bar_dupl(run, sample)
 
-        # row = dbc.Row(
-        #     [
-        #         dbc.Col(
-        #             [dmc.Title("Sample context", order=3), cell_distribution_plot],
-        #             width=6,
-        #         ),
-        #         dbc.Col(
-        #             [dmc.Title("Duplication level", order=3), box_dupl_plot], width=6
-        #         ),
-        #     ]
-        # )
+        row = dbc.Row(
+            [
+                dbc.Col(
+                    [dmc.Title("Sample context", order=3), cell_distribution_plot],
+                    width=6,
+                ),
+                dbc.Col(
+                    [dmc.Title("Duplication level", order=3), box_dupl_plot], width=6
+                ),
+            ]
+        )
 
         # figure = dcc.Graph(figure=px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16]))
         # export that figure into redis and then load it from redis
@@ -1883,11 +1919,11 @@ def fill_metadata_container(url, n_clicks, progress_store):
 
         return [
             card,
-            # html.Hr(),
-            # dmc.Title("Visualisation", order=2),
-            # dmc.Title("Global context", order=3),
-            # violin_plot,
-            # row,
+            html.Hr(),
+            dmc.Title("Visualisation", order=2),
+            dmc.Title("Global context", order=3),
+            violin_plot,
+            row,
             html.Hr(),
         ]
 
@@ -2516,7 +2552,7 @@ def populate_container_sample(
             n_clicks_report_ashleys_button
             and n_clicks_report_ashleys_button > report_ashleys_button_stored
         ):
-            pipeline = "ashleys-qc-pipeline"
+            pipeline = "mosaicatcher-pipeline"
             FASTAPI_HOST = config["fastapi"]["host"]
             FASTAPI_PORT = config["fastapi"]["port"]
             iframe = [
