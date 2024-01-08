@@ -1,6 +1,6 @@
 # IMPORTS
 import glob
-from io import BytesIO
+from io import BytesIO, StringIO
 import threading
 import collections
 from datetime import datetime
@@ -38,14 +38,6 @@ redis_client = redis.Redis(
     db=0,
 )
 
-# TODO : Move to function to allow data loading on page refresh
-df = pd.read_parquet("strandscape_vizu_dev.parquet")
-# TODO: remove, for temp dev
-
-df = df.loc[df["depictio_run_id"].str.contains("2023|2024")]
-print(df)
-df["prediction"] = df["prediction"].astype(str)
-
 
 VALID_USERNAME_PASSWORD_PAIRS = {
     os.getenv("USERNAME"): os.getenv("PASSWORD_STRANDSCAPE"),
@@ -74,6 +66,39 @@ config = load_config("config.yaml")
 root_folder = os.path.expanduser(config["data"]["data_folder"])
 
 # data = get_files_structure(root_folder)
+
+
+def load_data_from_redis(redis_key):
+    if redis_client.exists(redis_key):
+        print(f"DF - FETCH DATA exists in Redis for {redis_key}")
+        body = redis_client.get(redis_key)
+        return pd.read_json(StringIO(body.decode("utf-8")), orient="records")
+    else:
+        return None
+
+
+def load_data_from_file(file_path):
+    print(f"DF - FETCH DATA does not exist in Redis for {file_path}")
+    df = pd.read_parquet(file_path)
+    df = df.loc[df["depictio_run_id"].str.contains("2023|2024")]
+    return df
+
+
+def store_data_in_redis(redis_key, df, expiry=60):
+    redis_client.set(redis_key, df.to_json(orient="records"), ex=expiry)
+
+
+def load_data_for_vizu():
+    redis_key = "strandscape_vizu_dev.parquet"
+    file_path = "strandscape_vizu_dev.parquet"
+
+    df = load_data_from_redis(redis_key)
+    if df is None:
+        df = load_data_from_file(file_path)
+        store_data_in_redis(redis_key, df)
+    df["prediction"] = df["prediction"].astype(str)
+    print(df.prediction.dtype)
+    return df
 
 
 def trigger_snakemake_api(pipeline, run, sample, snake_args):
@@ -1633,6 +1658,8 @@ def update_progress(url, progress_store):
 
 
 def violinplot_context(run, sample):
+    df = load_data_for_vizu()
+
     if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
         # Check if the figure exists in Redis
         fig_name = "violin_fig"
@@ -1690,6 +1717,7 @@ def violinplot_context(run, sample):
 
 
 def bar_dupl(run, sample):
+    df = load_data_for_vizu()
     if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
         # Check if the figure exists in Redis
         fig_name = f"bar_dup_fig_{run}_{sample}"
@@ -1739,6 +1767,7 @@ def bar_dupl(run, sample):
 
 
 def cell_distribution(run, sample):
+    df = load_data_for_vizu()
     if run in df.depictio_run_id.unique() and sample in df["sample"].unique():
         # Check if the figure exists in Redis
         fig_name = f"scatter_fig_{run}_{sample}"
