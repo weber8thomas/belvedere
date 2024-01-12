@@ -1,6 +1,7 @@
 # IMPORTS
 import glob
 from io import BytesIO, StringIO
+import sys
 import threading
 import collections
 from datetime import datetime
@@ -16,6 +17,7 @@ import dash_bootstrap_components as dbc
 import dash
 import dash_ag_grid as dag
 from pprint import pprint
+import pika
 import plotly
 import requests
 import yaml
@@ -68,9 +70,38 @@ root_folder = os.path.expanduser(config["data"]["data_folder"])
 # data = get_files_structure(root_folder)
 
 
+def consume_last_message_from_rabbitmq(queue=str):
+    pika_connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host="localhost")
+    )
+    channel = pika_connection.channel()
+
+    # Fetch the message without auto acknowledgment
+    method_frame, header_frame, body = channel.basic_get(queue=queue, auto_ack=False)
+
+    if method_frame:
+        # Extract the timestamp from the header frame
+        timestamp = header_frame.timestamp
+        human_readable_timestamp = datetime.fromtimestamp(timestamp / 1000.0).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        # # Acknowledge the message after processing
+        channel.basic_nack(delivery_tag=method_frame.delivery_tag, requeue=True)
+        data = json.loads(body.decode("utf-8"))
+        print(data)
+        if not data:
+            print("EXITING")
+            sys.exit("RabbitMQ queue NOT empty but message is")
+        else:
+            print("RabbitMQ queue NOT empty and message is NOT empty")
+            print(data)
+            return data, human_readable_timestamp
+
+
 def load_data_from_redis(redis_key):
     if redis_client.exists(redis_key):
-        print(f"DF - FETCH DATA exists in Redis for {redis_key}")
+        # print(f"DF - FETCH DATA exists in Redis for {redis_key}")
         body = redis_client.get(redis_key)
         return pd.read_json(StringIO(body.decode("utf-8")), orient="records")
     else:
@@ -78,7 +109,7 @@ def load_data_from_redis(redis_key):
 
 
 def load_data_from_file(file_path):
-    print(f"DF - FETCH DATA does not exist in Redis for {file_path}")
+    # print(f"DF - FETCH DATA does not exist in Redis for {file_path}")
     df = pd.read_parquet(file_path)
     df = df.loc[df["depictio_run_id"].str.contains("2023|2024")]
     return df
@@ -97,7 +128,7 @@ def load_data_for_vizu():
         df = load_data_from_file(file_path)
         store_data_in_redis(redis_key, df)
     df["prediction"] = df["prediction"].astype(str)
-    print(df.prediction.dtype)
+    # print(df.prediction.dtype)
     return df
 
 
@@ -121,7 +152,7 @@ def fetch_data():
     FASTAPI_PORT = config["fastapi"]["port"]
 
     if redis_client.exists("fetch_data"):
-        print("FETCH DATA exists in Redis")
+        # print("FETCH DATA exists in Redis")
 
         # Get the figure from Redis
         response_json_complete = redis_client.get("fetch_data")
@@ -132,7 +163,7 @@ def fetch_data():
         response_json_complete = json.loads(response_json_complete)
 
     else:
-        print("FETCH DATA does not exist in Redis")
+        # print("FETCH DATA does not exist in Redis")
 
         response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
         response_json_complete = response.json()[0]
@@ -147,9 +178,9 @@ def fetch_data():
         redis_client.set("timestamp_fetch_data", timestamp, ex=60)
 
     # timestamp = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
-    print("TIME STAMP")
-    print(timestamp)
-    print(response_json_complete, type(response_json_complete))
+    # print("TIME STAMP")
+    # print(timestamp)
+    # print(response_json_complete, type(response_json_complete))
     response_json = collections.OrderedDict(
         # sorted(
         response_json_complete,
@@ -158,7 +189,7 @@ def fetch_data():
         # )
     )
 
-    print(response_json)
+    # print(response_json)
     response_json = {k: v for k, v in response_json.items() if "2023" in k}
 
     # print("SORTED DICT")
@@ -205,195 +236,195 @@ def extract_samples_names(l, directory_path):
     return prefixes, samples, plate_types
 
 
-def custom_status():
-    # get progress from API
-    def get_progress():
-        FASTAPI_HOST = config["fastapi"]["host"]
-        FASTAPI_PORT = config["fastapi"]["port"]
+# def custom_status():
+#     # get progress from API
+#     def get_progress():
+#         FASTAPI_HOST = config["fastapi"]["host"]
+#         FASTAPI_PORT = config["fastapi"]["port"]
 
-        response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-progress")
-        response_json = response.json()
-        return response_json
+#         response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-progress")
+#         response_json = response.json()
+#         return response_json
 
-    workflows_data_progress, last_message_timestamp = get_progress()
+#     workflows_data_progress, last_message_timestamp = get_progress()
 
-    publishdir_location = config["data"]["data_folder"]
-    data_location = config["data"]["complete_data_folder"]
+#     publishdir_location = config["data"]["data_folder"]
+#     data_location = config["data"]["complete_data_folder"]
 
-    main_df = list()
-    if workflows_data_progress:
-        for workflow in workflows_data_progress["workflows"]:
-            if "--" in workflow["name"]:
-                pipeline = workflow["name"].split("--")[0]
-                run = workflow["name"].split("--")[1]
-                sample = workflow["name"].split("--")[2]
+#     main_df = list()
+#     if workflows_data_progress:
+#         for workflow in workflows_data_progress["workflows"]:
+#             if "--" in workflow["name"]:
+#                 pipeline = workflow["name"].split("--")[0]
+#                 run = workflow["name"].split("--")[1]
+#                 sample = workflow["name"].split("--")[2]
 
-                genecore_path = (
-                    config["data"]["genecore_data_folder"]
-                    if run.startswith("2023")
-                    else config["data"]["genecore_data_folder_old"]
-                )
-                directory_path = f"{genecore_path}/{run}"
+#                 genecore_path = (
+#                     config["data"]["genecore_data_folder"]
+#                     if run.startswith("2023")
+#                     else config["data"]["genecore_data_folder_old"]
+#                 )
+#                 directory_path = f"{genecore_path}/{run}"
 
-                report = False
-                labels = False
-                multiqc_scratch = False
-                multiqc_scratch_timestamp = None
-                remaining_days = None
+#                 report = False
+#                 labels = False
+#                 multiqc_scratch = False
+#                 multiqc_scratch_timestamp = None
+#                 remaining_days = None
 
-                if os.path.isfile(
-                    f"{publishdir_location}/{run}/{sample}/cell_selection/labels.tsv"
-                ):
-                    labels = True
+#                 if os.path.isfile(
+#                     f"{publishdir_location}/{run}/{sample}/cell_selection/labels.tsv"
+#                 ):
+#                     labels = True
 
-                if os.path.isfile(
-                    f"{publishdir_location}/{run}/{sample}/reports/{sample}_{pipeline}_report.zip"
-                ):
-                    report = True
+#                 if os.path.isfile(
+#                     f"{publishdir_location}/{run}/{sample}/reports/{sample}_{pipeline}_report.zip"
+#                 ):
+#                     report = True
 
-                if os.path.isfile(
-                    f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
-                ):
-                    multiqc_scratch = True
-                    multiqc_scratch_timestamp = os.path.getmtime(
-                        f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
-                    )
-                    # to datetime and then strfmtime
-                    multiqc_scratch_timestamp = datetime.fromtimestamp(
-                        multiqc_scratch_timestamp
-                    )
-                    # computing remaning days to reach 5 months between multiqc_scratch_timestamp and now
-                    remaining_days = (datetime.now() - multiqc_scratch_timestamp).days
-                    remaining_days = 150 - remaining_days
+#                 if os.path.isfile(
+#                     f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
+#                 ):
+#                     multiqc_scratch = True
+#                     multiqc_scratch_timestamp = os.path.getmtime(
+#                         f"{data_location}/{run}/{sample}/multiqc/multiqc_report/multiqc_report.html"
+#                     )
+#                     # to datetime and then strfmtime
+#                     multiqc_scratch_timestamp = datetime.fromtimestamp(
+#                         multiqc_scratch_timestamp
+#                     )
+#                     # computing remaning days to reach 5 months between multiqc_scratch_timestamp and now
+#                     remaining_days = (datetime.now() - multiqc_scratch_timestamp).days
+#                     remaining_days = 150 - remaining_days
 
-                    multiqc_scratch_timestamp = multiqc_scratch_timestamp.strftime(
-                        "%Y-%m-%d"
-                    )
+#                     multiqc_scratch_timestamp = multiqc_scratch_timestamp.strftime(
+#                         "%Y-%m-%d"
+#                     )
 
-                if not workflow:
-                    workflow = {
-                        "id": "None",
-                        "status": "None",
-                        "started_at": last_message_timestamp,
-                        "completed_at": last_message_timestamp,
-                        "jobs_done": "None",
-                        "jobs_total": "None",
-                    }
-                # else:
-                #     print(workflow)
-                #     if workflow["started_at"] is not None:
-                #         workflow["started_at"] = datetime.strptime(
-                #             workflow["started_at"],
-                #             "%a, %d %b %Y %H:%M:%S GMT",
-                #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
-                #     else:
-                #         workflow["started_at"] = last_message_timestamp
+#                 if not workflow:
+#                     workflow = {
+#                         "id": "None",
+#                         "status": "None",
+#                         "started_at": last_message_timestamp,
+#                         "completed_at": last_message_timestamp,
+#                         "jobs_done": "None",
+#                         "jobs_total": "None",
+#                     }
+#                 # else:
+#                 #     print(workflow)
+#                 #     if workflow["started_at"] is not None:
+#                 #         workflow["started_at"] = datetime.strptime(
+#                 #             workflow["started_at"],
+#                 #             "%a, %d %b %Y %H:%M:%S GMT",
+#                 #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
+#                 #     else:
+#                 #         workflow["started_at"] = last_message_timestamp
 
-                #     if workflow["completed_at"] is not None:
-                #         workflow["completed_at"] = datetime.strptime(
-                #             workflow["completed_at"],
-                #             "%a, %d %b %Y %H:%M:%S GMT",
-                #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
-                #     else:
-                #         workflow["completed_at"] = last_message_timestamp
+#                 #     if workflow["completed_at"] is not None:
+#                 #         workflow["completed_at"] = datetime.strptime(
+#                 #             workflow["completed_at"],
+#                 #             "%a, %d %b %Y %H:%M:%S GMT",
+#                 #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
+#                 #     else:
+#                 #         workflow["completed_at"] = last_message_timestamp
 
-                # turn the print into a dict
-                tmp_d = {
-                    "panoptes_id": workflow["id"],
-                    "pipeline": pipeline,
-                    "run": run,
-                    "sample": sample,
-                    "report": report,
-                    "labels": labels,
-                    "multiqc_scratch": multiqc_scratch,
-                    "multiqc_scratch_timestamp": multiqc_scratch_timestamp,
-                    "remaining_days": remaining_days,
-                    "status": workflow["status"],
-                    # "prefix": list(prefixes)[0],
-                    # "plate_type": plate_type,
-                    "started_at": workflow["started_at"],
-                    "completed_at": workflow["completed_at"],
-                    "jobs_done": workflow["jobs_done"],
-                    "jobs_total": workflow["jobs_total"],
-                }
-                main_df.append(tmp_d)
-        pd.options.display.max_rows = 999
-        pd.options.display.max_colwidth = 30
-        # pd.options.display.max_columns = 50
-        main_df = pd.DataFrame(main_df)
-        print(main_df)
-        # main_df.loc[(main_df["labels"] == True) &  (main_df["report"] == True), "real_status"] = "Completed"
-        main_df.loc[
-            (main_df["labels"] == True)
-            & (main_df["report"] == False)
-            & (main_df["multiqc_scratch"] == False),
-            "real_status",
-        ] = "Report missing / /scratch still available"
-        main_df.loc[
-            (main_df["labels"] == False) & (main_df["report"] == True),
-            "real_status",
-        ] = "Error"
-        main_df.loc[
-            (main_df["labels"] == False)
-            & (main_df["report"] == False)
-            & (main_df["multiqc_scratch"] == False),
-            "real_status",
-        ] = "To process"
+#                 # turn the print into a dict
+#                 tmp_d = {
+#                     "panoptes_id": workflow["id"],
+#                     "pipeline": pipeline,
+#                     "run": run,
+#                     "sample": sample,
+#                     "report": report,
+#                     "labels": labels,
+#                     "multiqc_scratch": multiqc_scratch,
+#                     "multiqc_scratch_timestamp": multiqc_scratch_timestamp,
+#                     "remaining_days": remaining_days,
+#                     "status": workflow["status"],
+#                     # "prefix": list(prefixes)[0],
+#                     # "plate_type": plate_type,
+#                     "started_at": workflow["started_at"],
+#                     "completed_at": workflow["completed_at"],
+#                     "jobs_done": workflow["jobs_done"],
+#                     "jobs_total": workflow["jobs_total"],
+#                 }
+#                 main_df.append(tmp_d)
+#         pd.options.display.max_rows = 999
+#         pd.options.display.max_colwidth = 30
+#         # pd.options.display.max_columns = 50
+#         main_df = pd.DataFrame(main_df)
+#         print(main_df)
+#         # main_df.loc[(main_df["labels"] == True) &  (main_df["report"] == True), "real_status"] = "Completed"
+#         main_df.loc[
+#             (main_df["labels"] == True)
+#             & (main_df["report"] == False)
+#             & (main_df["multiqc_scratch"] == False),
+#             "real_status",
+#         ] = "Report missing / /scratch still available"
+#         main_df.loc[
+#             (main_df["labels"] == False) & (main_df["report"] == True),
+#             "real_status",
+#         ] = "Error"
+#         main_df.loc[
+#             (main_df["labels"] == False)
+#             & (main_df["report"] == False)
+#             & (main_df["multiqc_scratch"] == False),
+#             "real_status",
+#         ] = "To process"
 
-        main_df.loc[
-            (main_df["labels"] == False)
-            & (main_df["report"] == False)
-            & (main_df["status"] != "Done"),
-            "real_status",
-        ] = "Uncompleted execution on /scratch"
-        main_df.loc[
-            (main_df["labels"] == True)
-            & (main_df["report"] == False)
-            & (main_df["multiqc_scratch"] == True),
-            "real_status",
-        ] = "Uncompleted execution on /scratch"
-        main_df.loc[
-            (main_df["labels"] == True)
-            & (main_df["report"] == True)
-            & (main_df["status"] == "None"),
-            "real_status",
-        ] = "Error"
-        main_df.loc[
-            (main_df["labels"] == True)
-            & (main_df["report"] == True)
-            & (main_df["status"] == "Running"),
-            "real_status",
-        ] = "Running"
-        main_df.loc[
-            (main_df["labels"] == True)
-            & (main_df["report"] == True)
-            & (main_df["status"] == "Done"),
-            "real_status",
-        ] = "Completed"
+#         main_df.loc[
+#             (main_df["labels"] == False)
+#             & (main_df["report"] == False)
+#             & (main_df["status"] != "Done"),
+#             "real_status",
+#         ] = "Uncompleted execution on /scratch"
+#         main_df.loc[
+#             (main_df["labels"] == True)
+#             & (main_df["report"] == False)
+#             & (main_df["multiqc_scratch"] == True),
+#             "real_status",
+#         ] = "Uncompleted execution on /scratch"
+#         main_df.loc[
+#             (main_df["labels"] == True)
+#             & (main_df["report"] == True)
+#             & (main_df["status"] == "None"),
+#             "real_status",
+#         ] = "Error"
+#         main_df.loc[
+#             (main_df["labels"] == True)
+#             & (main_df["report"] == True)
+#             & (main_df["status"] == "Running"),
+#             "real_status",
+#         ] = "Running"
+#         main_df.loc[
+#             (main_df["labels"] == True)
+#             & (main_df["report"] == True)
+#             & (main_df["status"] == "Done"),
+#             "real_status",
+#         ] = "Completed"
 
-        main_df.loc[
-            (main_df["labels"] == False)
-            & (main_df["report"] == False)
-            & (main_df["multiqc_scratch"] == True),
-            "real_status",
-        ] = "Uncompleted execution on /scratch"
-        main_df["real_status"] = main_df["real_status"].fillna(
-            "Error (to  investigate))"
-        )
-        main_df = main_df.sort_values(by=["pipeline", "run", "sample"])
-        print(main_df)
-        return main_df
+#         main_df.loc[
+#             (main_df["labels"] == False)
+#             & (main_df["report"] == False)
+#             & (main_df["multiqc_scratch"] == True),
+#             "real_status",
+#         ] = "Uncompleted execution on /scratch"
+#         main_df["real_status"] = main_df["real_status"].fillna(
+#             "Error (to  investigate))"
+#         )
+#         main_df = main_df.sort_values(by=["pipeline", "run", "sample"])
+#         print(main_df)
+#         return main_df
 
 
-data_panoptes_custom_status = custom_status()
-data_panoptes_custom_status["name"] = data_panoptes_custom_status.apply(
-    lambda r: "--".join([r["pipeline"], r["run"], r["sample"]]), axis=1
-)
-print("data_panoptes_custom_status")
-data_panoptes_custom_status = data_panoptes_custom_status.set_index("name").to_dict(
-    "index"
-)
-print(data_panoptes_custom_status)
+# data_panoptes_custom_status = custom_status()
+# data_panoptes_custom_status["name"] = data_panoptes_custom_status.apply(
+#     lambda r: "--".join([r["pipeline"], r["run"], r["sample"]]), axis=1
+# )
+# print("data_panoptes_custom_status")
+# data_panoptes_custom_status = data_panoptes_custom_status.set_index("name").to_dict(
+#     "index"
+# )
+# print(data_panoptes_custom_status)
 
 
 @app.callback(
@@ -1123,10 +1154,10 @@ def disable_report_button(progress_store, url):
     if url != "/":
         run, sample = url.split("/")[1:3]
         print(run, sample)
-        if (
-            progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"]
-            == "Done"
-        ):
+        if progress_store[f"{run}--{sample}"]["ashleys-qc-pipeline"]["status"] in [
+            "Completed",
+            "Partial report",
+        ]:
             return False, False
         else:
             return True, True
@@ -1172,21 +1203,22 @@ def disable_report_button(url, progress_store, store_save_button):
 
 def generate_progress_bar(entry):
     status = entry["status"]
-    if status != "not_started":
-        progress = round((entry["jobs_done"] / entry["jobs_total"]) * 100, 2)
-    else:
-        progress = 0
+    # if status != "not_started":
+    #     progress = round((entry["jobs_done"] / entry["jobs_total"]) * 100, 2)
+    # else:
+    #     progress = 0
 
     color = "primary"
     animated = True
     striped = True
     label = ""
 
-    label = f"{status} - {progress} %"
-
+    label = f"{status}"
+    value = 100
     # if data_panoptes_custom_status[entry["name"]]:
     #     if data_panoptes_custom_status[entry["name"]]["real_status"] == "Completed":
-    if progress == 100 and status == "Done":
+    if status == "Completed":
+        # if progress == 100 and status == "Done":
         color = "success"
         animated = False
         striped = False
@@ -1194,28 +1226,33 @@ def generate_progress_bar(entry):
         # label = (
         #     f'{data_panoptes_custom_status[entry["name"]]["real_status"]} - {progress}'
         # )
-    elif progress == 100 and status in ["Missing report"]:
+    elif status in ["Partial report"]:
+        # elif progress == 100 and status in ["Missing report"]:
         # elif progress < 100 and status == "Error":
         color = "orange"
         animated = False
         striped = False
-    elif progress == 100 and status in ["Completed but status error"]:
+    elif status in ["Completed but status error"]:
+        # elif progress == 100 and status in ["Completed but status error"]:
         # elif progress < 100 and status == "Error":
         color = "red"
         animated = False
         striped = False
     # elif progress < 100 and status == "Running":
-    elif progress < 100:
+    elif status in ["Running"]:
+        # elif progress < 100:
         color = "primary"
         animated = True
         striped = True
-        label = f"{progress} %"
-    elif progress == 0 and status == "not_started":
+        # label = f"{progress} %"
+    elif status == "To process":
+        # elif progress == 0 and status == "not_started":
         color = "grey"
         animated = False
         striped = False
+        value = 0
         # print("TOTO")
-        label = "Not Started"
+        # label = "Not Started"
     # else:
     #     color = "grey"
     #     animated = False
@@ -1226,7 +1263,7 @@ def generate_progress_bar(entry):
     # run, sample = entry["name"].split("--")
 
     progress_bar = dbc.Progress(
-        value=progress,
+        value=value,
         animated=animated,
         striped=striped,
         color=color,
@@ -1313,15 +1350,15 @@ def generate_progress_bar(entry):
 def update_progress(
     data_panoptes_raw, url, selected_run, selected_sample, n_clicks, stored_n_clicks
 ):
-    print("UPDATE PROGRESS")
-    print(n_clicks, stored_n_clicks)
+    # print("UPDATE PROGRESS")
+    # print(n_clicks, stored_n_clicks)
     continue_update = False
     if url != "/":
         raise dash.exceptions.PreventUpdate
         # return dash.no_update
     else:
-        print("UPDATE PROGRESS")
-        print(n_clicks, stored_n_clicks)
+        # print("UPDATE PROGRESS")
+        # print(n_clicks, stored_n_clicks)
         if n_clicks is None:
             raise dash.exceptions.PreventUpdate
         else:
@@ -1331,8 +1368,8 @@ def update_progress(
                 if n_clicks > stored_n_clicks:
                     continue_update = True
             if continue_update is True:
-                print("CONTINUE UPDATE")
-                print(n_clicks, stored_n_clicks)
+                # print("CONTINUE UPDATE")
+                # print(n_clicks, stored_n_clicks)
                 components = []
 
                 data_panoptes = collections.OrderedDict(
@@ -1550,6 +1587,13 @@ def update_progress(url, progress_store):
     response_json_complete = response.json()
     response_json = response_json_complete[0]
     timestamp_progress = response_json_complete[1]
+    print("timestamp_progress")
+    print(timestamp_progress)
+
+    pd.options.display.max_rows = 200
+    pd.options.display.max_colwidth = 30
+    message_df = pd.read_json(StringIO(response_json), orient="records")
+    print(message_df)
 
     # print(response_json)
     # print(timestamp_progress)
@@ -1561,37 +1605,48 @@ def update_progress(url, progress_store):
     # print("\n\n")
     # Extract data
 
-    tmp_data, timestamp = fetch_data()
-    data_lite = [
-        f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v, reverse=False)
-    ]
-    data_panoptes_raw = [
-        wf
-        for wf in response_json["workflows"]
-        if "--".join(wf["name"].split("--")[1:]) in data_lite
-    ]
+    # tmp_data, timestamp = fetch_data()
+    # data_lite = [
+    #     f"{k}--{e}" for k, v in tmp_data.items() for e in sorted(v, reverse=False)
+    # ]
+
+    # # print("data_panoptes_raw")
+    # # print(message_df)
+    # # print(tmp_data)
+    # # exit()
+    # print([wf for wf in response_json["workflows"]])
+    # data_panoptes_raw = [
+    #     wf
+    #     for wf in response_json["workflows"]
+    #     if "--".join(wf["name"].split("--")[1:]) in data_lite
+    # ]
+    # print(data_panoptes_raw)
+
+    # print("data_panoptes")
 
     data_panoptes = collections.defaultdict(dict)
-    for wf in data_panoptes_raw:
-        pipeline, run, sample = wf["name"].split("--")
-        data_panoptes[f"{run}--{sample}"][pipeline] = wf
+    # for wf in data_panoptes_raw:
+    #     pipeline, run, sample = wf["name"].split("--")
+    #     data_panoptes[f"{run}--{sample}"][pipeline] = wf
 
     # data_panoptes = {wf["name"]: wf for wf in data_panoptes}
 
-    for run_sample in data_lite:
-        for pipeline in ["ashleys-qc-pipeline"]:
-            # for pipeline in ["ashleys-qc-pipeline", "mosaicatcher-pipeline"]:
-            if pipeline not in data_panoptes[run_sample]:
-                data_panoptes[run_sample][pipeline] = {
-                    "name": run_sample,
-                    "jobs_total": 0,
-                    "jobs_done": 0,
-                    "status": "not_started",
-                }
-    if progress_store == data_panoptes:
-        print("NO UPDATE")
-        return dash.no_update
-    progress_store = data_panoptes
+    for j, row in message_df.iterrows():
+        # for pipeline in ["ashleys-qc-pipeline"]:
+        # for pipeline in ["ashleys-qc-pipeline", "mosaicatcher-pipeline"]:
+        # if pipeline not in data_panoptes[run_sample]:
+        run_sample = f"{row['plate']}--{row['sample']}"
+        data_panoptes[run_sample]["ashleys-qc-pipeline"] = {
+            "name": f"ashleys-qc-pipeline--{run_sample}",
+            # "jobs_total": 0,
+            # "jobs_done": 0,
+            # "status": "To process",
+            "status": row["real_status"],
+        }
+    # if progress_store == data_panoptes:
+    #     print("NO UPDATE")
+    #     return dash.no_update
+    # progress_store = data_panoptes
 
     # FASTAPI_HOST = config["fastapi"]["host"]
     # FASTAPI_PORT = config["fastapi"]["port"]
@@ -1599,14 +1654,13 @@ def update_progress(url, progress_store):
     # response_json_complete = response.json()
     # response_json = response_json_complete[0]
     # timestamp_data = response_json_complete[1]
-
-    timestamp_data = dmc.Text(
-        f"Last data update: {timestamp.decode('utf-8')}", size="xs"
-    )
+    print("timestamp_data")
+    # timestamp_data = dmc.Text(f"Last data update: {timestamp}", size="xs")
     timestamp_progress = dmc.Text(
         f"Last progress update: {timestamp_progress}", size="xs"
     )
-    div_timestamps = html.Div([timestamp_data, timestamp_progress])
+    div_timestamps = html.Div([timestamp_progress])
+    print(div_timestamps)
     return data_panoptes, div_timestamps
 
 
@@ -1664,7 +1718,7 @@ def violinplot_context(run, sample):
         # Check if the figure exists in Redis
         fig_name = "violin_fig"
         if redis_client.exists(fig_name):
-            print("Figure exists in Redis")
+            # print("Figure exists in Redis")
 
             # Get the figure from Redis
             retrieved_figure_json = redis_client.get(fig_name)
@@ -1675,7 +1729,7 @@ def violinplot_context(run, sample):
             fig = plotly.io.from_json(retrieved_figure_json)
 
         else:
-            print("Figure does not exist in Redis")
+            # print("Figure does not exist in Redis")
 
             # Create a Plotly figure
             # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
@@ -1722,7 +1776,7 @@ def bar_dupl(run, sample):
         # Check if the figure exists in Redis
         fig_name = f"bar_dup_fig_{run}_{sample}"
         if redis_client.exists(fig_name):
-            print("Figure exists in Redis")
+            # print("Figure exists in Redis")
 
             # Get the figure from Redis
             retrieved_figure_json = redis_client.get(fig_name)
@@ -1733,7 +1787,7 @@ def bar_dupl(run, sample):
             fig = plotly.io.from_json(retrieved_figure_json)
 
         else:
-            print("Figure does not exist in Redis")
+            # print("Figure does not exist in Redis")
 
             # Create a Plotly figure
             # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
@@ -1772,7 +1826,7 @@ def cell_distribution(run, sample):
         # Check if the figure exists in Redis
         fig_name = f"scatter_fig_{run}_{sample}"
         if redis_client.exists(fig_name):
-            print("Figure exists in Redis")
+            # print("Figure exists in Redis")
 
             # Get the figure from Redis
             retrieved_figure_json = redis_client.get(fig_name)
@@ -1783,7 +1837,7 @@ def cell_distribution(run, sample):
             fig = plotly.io.from_json(retrieved_figure_json)
 
         else:
-            print("Figure does not exist in Redis")
+            # print("Figure does not exist in Redis")
 
             # Create a Plotly figure
             # figure = px.scatter(x=[0, 1, 2, 3, 4], y=[0, 1, 4, 9, 16])
@@ -2770,18 +2824,23 @@ def generate_sidebar_stats(url):
     if url:
         print("\n\n")
         print("generating sidebar stats")
-        data, timestamp = fetch_data()
+        # data, timestamp = fetch_data()
+        data = load_data_from_file(file_path="strandscape_vizu_dev.parquet")
+        data = data.loc[data["depictio_run_id"].str.contains("2023|2024", regex=True)]
+        print(data)
         # print(data)
 
-        nb_runs = len(list(data.keys()))
-        print(nb_runs)
-        nb_samples = sum([len(v) for k, v in data.items()])
-        print(nb_samples)
+        nb_runs = data.depictio_run_id.nunique()
+        nb_samples = data[["depictio_run_id", "sample"]].drop_duplicates().shape[0]
+        nb_cells = data.shape[0]
+        # print(nb_runs)
+        # nb_samples = sum([len(v) for k, v in data.items()])
+        # print(nb_samples)
         layout = [
             dmc.Center(
                 [
                     dmc.Text(
-                        f"Number of runs: {nb_runs}",
+                        f"Runs: {nb_runs}",
                         size="sm",
                         weight=400,
                     ),
@@ -2789,7 +2848,14 @@ def generate_sidebar_stats(url):
             ),
             dmc.Center(
                 dmc.Text(
-                    f"Number of samples: {nb_samples}",
+                    f"Samples: {nb_samples}",
+                    size="sm",
+                    weight=400,
+                ),
+            ),
+            dmc.Center(
+                dmc.Text(
+                    f"Cells: {nb_cells}",
                     size="sm",
                     weight=400,
                 ),

@@ -89,9 +89,15 @@ async def get_progress():
         queue=config["panoptes"]["rabbitmq"]["queue"],
     )
 
-    print(data, timestamp)
-    if data == {}:
-        data = {"workflows": []}
+    # print(data, timestamp)
+    # if data == {}:
+    #     data = {"workflows": []}
+    # return data, timestamp
+    # message_df = pd.read_json(StringIO(data), orient="records")
+    # pd.options.display.max_rows = 999
+    # pd.options.display.max_colwidth = 30
+    # print(message_df)
+    # print(timestamp)
     return data, timestamp
 
 
