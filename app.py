@@ -70,6 +70,115 @@ root_folder = os.path.expanduser(config["data"]["data_folder"])
 # data = get_files_structure(root_folder)
 
 
+# Fetching the file structure based on the root folder
+def fetch_data():
+    FASTAPI_HOST = config["fastapi"]["host"]
+    FASTAPI_PORT = config["fastapi"]["port"]
+
+    if redis_client.exists("fetch_data"):
+        # print("FETCH DATA exists in Redis")
+
+        # Get the figure from Redis
+        response_json_complete = redis_client.get("fetch_data")
+        timestamp = redis_client.get("timestamp_fetch_data")
+
+        # Deserialize the JSON back to a Plotly figure
+        # Since Redis returns data in bytes, we need to convert it to a string
+        response_json_complete = json.loads(response_json_complete)
+
+    else:
+        # print("FETCH DATA does not exist in Redis")
+
+        response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
+        response_json_complete = response.json()[0]
+        timestamp = response.json()[1]
+
+        # response_json_complete = response_json_complete[0].items()
+        # print(response_json_complete)
+
+        # Store the figure in Redis
+        # Assuming the key for storing the figure is 'my_figure'
+        redis_client.set("fetch_data", json.dumps(response_json_complete), ex=60)
+        redis_client.set("timestamp_fetch_data", timestamp, ex=60)
+
+    # timestamp = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
+    # print("TIME STAMP")
+    # print(timestamp)
+    # print(response_json_complete, type(response_json_complete))
+    response_json = collections.OrderedDict(
+        # sorted(
+        response_json_complete,
+        #     # key=lambda x: list(response_json_complete[0].keys()).index(x),
+        #     reverse=True,
+        # )
+    )
+
+    # print(response_json)
+    response_json = {
+        k: v for k, v in response_json.items() if "2023" in k or "2024" in k
+    }
+
+    # print("SORTED DICT")
+    # print(response_json)
+    # print(timestamp)
+    return response_json, timestamp
+
+
+def generate_data_file(directory):
+    # Define the directory containing the files
+
+    # Pattern to match the files
+    pattern = re.compile(
+        r"\/g\/korbel\/WORKFLOW_RESULTS\/202[0-3]-\d{2}-\d{2}-.*\/(.*)\/counts\/\1.info_raw"
+    )
+
+    # Initialize an empty DataFrame to store aggregated data
+    df_aggregated = pd.DataFrame()
+
+    # Iterate over the files in the main directory
+
+    unwanted = ["._.DS_Store", ".DS_Store", "config"]
+
+    total_list_runs = sorted([e for e in os.listdir(directory) if e not in unwanted])
+    print(total_list_runs)
+
+    l_df = list()
+
+    for plate in total_list_runs:
+        if plate.split("-")[0] in ["2023", "2024"]:
+            for sample in os.listdir(os.path.join(directory, plate)):
+                if "sample" not in unwanted:
+                    counts_stats_file_path = os.path.join(
+                        directory, plate, sample, "counts", f"{sample}.info_raw"
+                    )
+                    labels_file_path = os.path.join(
+                        directory, plate, sample, "cell_selection", "labels.tsv"
+                    )
+
+                    if os.path.isfile(counts_stats_file_path):
+                        if os.path.isfile(labels_file_path):
+                            # print(counts_stats_file_path)
+                            tmp_df_stats = pd.read_csv(
+                                counts_stats_file_path, sep="\t", skiprows=13
+                            )
+                            tmp_df_stats["depictio_run_id"] = plate
+                            tmp_df_labels = pd.read_csv(labels_file_path, sep="\t")
+                            tmp_df_labels["depictio_run_id"] = plate
+                            tmp_df_labels["cell"] = tmp_df_labels["cell"].str.replace(
+                                ".sort.mdup.bam", ""
+                            )
+                            tmp_df = tmp_df_stats.merge(
+                                tmp_df_labels, on=["depictio_run_id", "sample", "cell"]
+                            )
+                            l_df.append(tmp_df)
+
+    l_df = pd.concat(l_df)
+    l_df["year"] = l_df["depictio_run_id"].apply(lambda r: r.split("-")[0])
+    l_df.to_parquet(
+        "/g/korbel2/weber/workspace/strandscape/strandscape_vizu_dev.parquet"
+    )
+
+
 def consume_last_message_from_rabbitmq(queue=str):
     pika_connection = pika.BlockingConnection(
         pika.ConnectionParameters(host="localhost")
@@ -126,6 +235,16 @@ def load_data_for_vizu():
     df = load_data_from_redis(redis_key)
     if df is None:
         df = load_data_from_file(file_path)
+
+        sample_list = [sub_e for k, v in fetch_data()[0].items() for sub_e in v]
+        if df["sample"].nunique() < len(sample_list):
+            print("Updating data file")
+            print(
+                f"Nb of samples in data file: {df['sample'].nunique()} ; Nb of samples in RabbitMQ: {len(fetch_data()[0].keys())}"
+            )
+            generate_data_file(config["data"]["data_folder"])
+            df = load_data_from_file(file_path)
+
         store_data_in_redis(redis_key, df)
     df["prediction"] = df["prediction"].astype(str)
     # print(df.prediction.dtype)
@@ -144,58 +263,6 @@ def trigger_snakemake_api(pipeline, run, sample, snake_args):
     # Check the response
     print(response.status_code)
     print(response.json())
-
-
-# Fetching the file structure based on the root folder
-def fetch_data():
-    FASTAPI_HOST = config["fastapi"]["host"]
-    FASTAPI_PORT = config["fastapi"]["port"]
-
-    if redis_client.exists("fetch_data"):
-        # print("FETCH DATA exists in Redis")
-
-        # Get the figure from Redis
-        response_json_complete = redis_client.get("fetch_data")
-        timestamp = redis_client.get("timestamp_fetch_data")
-
-        # Deserialize the JSON back to a Plotly figure
-        # Since Redis returns data in bytes, we need to convert it to a string
-        response_json_complete = json.loads(response_json_complete)
-
-    else:
-        # print("FETCH DATA does not exist in Redis")
-
-        response = requests.get(f"http://{FASTAPI_HOST}:{FASTAPI_PORT}/get-data")
-        response_json_complete = response.json()[0]
-        timestamp = response.json()[1]
-
-        # response_json_complete = response_json_complete[0].items()
-        # print(response_json_complete)
-
-        # Store the figure in Redis
-        # Assuming the key for storing the figure is 'my_figure'
-        redis_client.set("fetch_data", json.dumps(response_json_complete), ex=60)
-        redis_client.set("timestamp_fetch_data", timestamp, ex=60)
-
-    # timestamp = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")
-    # print("TIME STAMP")
-    # print(timestamp)
-    # print(response_json_complete, type(response_json_complete))
-    response_json = collections.OrderedDict(
-        # sorted(
-        response_json_complete,
-        #     # key=lambda x: list(response_json_complete[0].keys()).index(x),
-        #     reverse=True,
-        # )
-    )
-
-    # print(response_json)
-    response_json = {k: v for k, v in response_json.items() if "2023" in k}
-
-    # print("SORTED DICT")
-    # print(response_json)
-    # print(timestamp)
-    return response_json, timestamp
 
 
 def extract_samples_names(l, directory_path):
