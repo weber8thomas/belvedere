@@ -527,301 +527,348 @@ def fill_sample_wise_container(url):
 
         # If both the selected run and sample are present
         if selected_run and selected_sample:
-            # Fetch and merge necessary data from files
-            # TODO: bind to configuration file
             data_folder = config["data"]["data_folder"]
-            df = merge_labels_and_info(
-                f"{data_folder}/{selected_run}/{selected_sample}/cell_selection/labels.tsv",
-                f"{data_folder}/{selected_run}/{selected_sample}/counts/{selected_sample}.info_raw",
-            )
 
-            # Create the offcanvas datatable using dash-ag-grid
-            datatable = dag.AgGrid(
-                id={
-                    "type": "selection-checkbox-grid",
-                    "index": f"{selected_run}--{selected_sample}",
-                },
-                columnDefs=columnDefs,
-                rowData=df.to_dict("records"),
-                defaultColDef=defaultColDef,
-                # selectedRows=df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict(
-                #     "records"
-                # ),
-                dashGridOptions={"rowSelection": "multiple"},
-                style={"height": "750px"},
-            )
-
-            # Create a modal to display when saving is successful
-            modal_save_success = dbc.Modal(
-                [
-                    dbc.ModalHeader(
-                        html.H1(
-                            "Success!",
-                            className="text-success",
-                        )
-                    ),
-                    dbc.ModalBody(
-                        html.H5(
-                            f"Your cell selection for {selected_run} - {selected_sample} was successfully saved!",
-                            className="text-success",
-                        ),
-                        style={"background-color": "#F0FFF0"},
-                    ),
-                    dbc.ModalFooter(
-                        dbc.Button(
-                            "Close",
-                            id="success-modal-close",
-                            className="ml-auto",
-                            color="success",
-                        )
-                    ),
-                ],
-                id="success-modal-dashboard",
-                centered=True,
-            )
-
-            # Create an offcanvas (side panel) for cell selection
-            offcanvas = dbc.Offcanvas(
-                [
-                    dbc.Row(
-                        dmc.Center(
-                            dmc.TextInput(
-                                id={
-                                    "type": "embl-login",
-                                    "index": f"{selected_run}--{selected_sample}",
-                                },
-                                label="Your EMBL login",
-                                style={"width": 200},
-                                placeholder="Your EMBL login",
-                                icon=DashIconify(icon="uiw:login"),
-                            )
-                        )
-                    ),
-                    html.Hr(),
-                    dbc.Row(datatable),
-                    dbc.Row(
-                        [
-                            # dbc.Button(
-                            #     "Save", id="save-button", style={"width": "10%", "align": "center"}
-                            # ),
-                            html.Hr(),
-                            dmc.Center(
-                                dmc.Button(
-                                    "Save",
-                                    id={
-                                        "type": "save-button",
-                                        "index": f"{selected_run}--{selected_sample}",
-                                    },
-                                    radius="xl",
-                                    variant="filled",
-                                    color="green",
-                                    n_clicks=0,
-                                    size="xl",
-                                    leftIcon=DashIconify(icon="bxs:save"),
-                                    style={
-                                        "width": "20%",
-                                        "align": "center",
-                                        # "height": "100%",
-                                    },
-                                )
-                            ),
-                            modal_save_success,
-                        ]
-                    ),
-                ],
-                id={
-                    "type": "offcanvas",
-                    "index": f"{selected_run}--{selected_sample}",
-                },
-                is_open=False,
-                title="Cell selection",
-                backdrop=True,
-                # header_style={"textAlign": "center"},
-                style={"width": "50%"},
-                placement="end",
-            )
-
-            # Load or set default settings/data for various components
-            # TODO: move to config file
-            data_folder = config["data"]["data_folder"]
-            belvedere_json_path = f"{data_folder}/{selected_run}/{selected_sample}/config/strandscape.json"
-
-            if os.path.isfile(belvedere_json_path):
-                sample_json = json.load(open(belvedere_json_path))
-                if "stored-selectedRows" not in sample_json:
-                    print(df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)])
-                    sample_json["stored-selectedRows"] = df.loc[
-                        (df["prediction"] == 1) & (df["pass1"] == 1)
-                    ].to_dict("records")
+            if os.path.isfile(
+                f"{data_folder}/{selected_run}/{selected_sample}/cell_selection/labels.tsv"
+            ) and os.path.isfile(
+                f"{data_folder}/{selected_run}/{selected_sample}/counts/{selected_sample}.info_raw"
+            ):
+                files_available = True
             else:
-                sample_json = {
-                    "stored-report-button-ashleys": 0,
-                    "stored-save-button": {
-                        "n_clicks": 0,
-                        "run_mosaicatcher_disabled": True,
+                files_available = False
+
+            if files_available:
+                # Fetch and merge necessary data from files
+                # TODO: bind to configuration file
+                df = merge_labels_and_info(
+                    f"{data_folder}/{selected_run}/{selected_sample}/cell_selection/labels.tsv",
+                    f"{data_folder}/{selected_run}/{selected_sample}/counts/{selected_sample}.info_raw",
+                )
+
+                # Create the offcanvas datatable using dash-ag-grid
+                datatable = dag.AgGrid(
+                    id={
+                        "type": "selection-checkbox-grid",
+                        "index": f"{selected_run}--{selected_sample}",
                     },
-                    "stored-selectedRows": df.loc[
-                        (df["prediction"] == 1) & (df["pass1"] == 1)
-                    ].to_dict("records"),
-                    "stored-homepage-button": 0,
-                    "stored-report-button-mosaicatcher": 0,
-                    "stored-run-mosaicatcher-button": {"n_clicks": 0, "disabled": True},
-                }
+                    columnDefs=columnDefs,
+                    rowData=df.to_dict("records"),
+                    defaultColDef=defaultColDef,
+                    # selectedRows=df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)].to_dict(
+                    #     "records"
+                    # ),
+                    dashGridOptions={"rowSelection": "multiple"},
+                    style={"height": "750px"},
+                )
 
-            # Store settings/data for various components
-            stored_components_buttons = html.Div(
-                [
-                    dcc.Store(
-                        id={
-                            "type": "stored-refresh-button-samplewise",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        data=0,
-                        # data=sample_json["stored-refresh-button-samplewise"],
-                        storage_type="session",
-                    ),
-                    dcc.Store(
-                        id={
-                            "type": "invisible-output",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        data=0,
-                        # data=sample_json["stored-refresh-button-samplewise"],
-                        storage_type="session",
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-report-button-ashleys",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data=0,
-                        data=sample_json["stored-report-button-ashleys"],
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-save-button",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
-                        data=sample_json["stored-save-button"],
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-selectedRows",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data=df.loc[
-                        #     (df["prediction"] == 1) & (df["pass1"] == 1)
-                        # ].to_dict("records"),
-                        data=sample_json["stored-selectedRows"],
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-homepage-button",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data=0,
-                        data=sample_json["stored-homepage-button"],
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-report-button-mosaicatcher",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data=0,
-                        data=sample_json["stored-report-button-mosaicatcher"],
-                    ),
-                    dcc.Store(
-                        {
-                            "type": "stored-run-mosaicatcher-button",
-                            "index": f"{selected_run}--{selected_sample}",
-                        },
-                        storage_type="session",
-                        # data={"n_clicks": 0, "disabled": True},
-                        data=sample_json["stored-run-mosaicatcher-button"],
-                    ),
-                ]
-            )
-
-            # Create main action buttons (e.g., Save, Refresh, etc.)
-            buttons = dmc.Center(
-                dmc.Group(
+                # Create a modal to display when saving is successful
+                modal_save_success = dbc.Modal(
                     [
-                        dmc.Button(
-                            "Homepage",
-                            id={
-                                "type": "homepage-button",
-                                "index": f"{selected_run}--{selected_sample}",
-                            },
-                            radius="xl",
-                            variant="gradient",
-                            n_clicks=0,
-                            size="sm",
-                            leftIcon=DashIconify(icon="mdi:home"),
+                        dbc.ModalHeader(
+                            html.H1(
+                                "Success!",
+                                className="text-success",
+                            )
                         ),
-                        dmc.Button(
-                            "Display report",
-                            # "Display Ashleys-QC report",
-                            id={
-                                "type": "report-button-ashleys",
-                                "index": f"{selected_run}--{selected_sample}",
-                            },
-                            radius="xl",
-                            color="pink",
-                            size="sm",
-                            n_clicks=0,
-                            disabled=True,
-                            leftIcon=DashIconify(icon="mdi:eye"),
+                        dbc.ModalBody(
+                            html.H5(
+                                f"Your cell selection for {selected_run} - {selected_sample} was successfully saved!",
+                                className="text-success",
+                            ),
+                            style={"background-color": "#F0FFF0"},
                         ),
-                        dmc.Button(
-                            "Cell selection",
-                            id={
-                                "type": "open-button",
-                                "index": f"{selected_run}--{selected_sample}",
-                            },
-                            radius="xl",
-                            n_clicks=0,
-                            color="orange",
-                            disabled=True,
-                            size="sm",
-                            leftIcon=DashIconify(icon="mdi:hand-tap"),
-                        ),
-                        dmc.Button(
-                            "Run MosaiCatcher",
-                            id={
-                                "type": "run-mosaicatcher-button",
-                                "index": f"{selected_run}--{selected_sample}",
-                            },
-                            radius="xl",
-                            color="red",
-                            n_clicks=0,
-                            disabled=True,
-                            size="sm",
-                            leftIcon=DashIconify(icon="ooui:logo-wikimedia-discovery"),
-                            style={"display": "none"},
-                        ),
-                        dmc.Button(
-                            "Display MosaiCatcher report",
-                            id={
-                                "type": "report-button-mosaicatcher",
-                                "index": f"{selected_run}--{selected_sample}",
-                            },
-                            radius="xl",
-                            n_clicks=0,
-                            color="grape",
-                            disabled=True,
-                            size="sm",
-                            leftIcon=DashIconify(icon="mdi:eye"),
-                            style={"display": "none"},
+                        dbc.ModalFooter(
+                            dbc.Button(
+                                "Close",
+                                id="success-modal-close",
+                                className="ml-auto",
+                                color="success",
+                            )
                         ),
                     ],
+                    id="success-modal-dashboard",
+                    centered=True,
                 )
-            )
+
+                # Create an offcanvas (side panel) for cell selection
+                offcanvas = dbc.Offcanvas(
+                    [
+                        dbc.Row(
+                            dmc.Center(
+                                dmc.TextInput(
+                                    id={
+                                        "type": "embl-login",
+                                        "index": f"{selected_run}--{selected_sample}",
+                                    },
+                                    label="Your EMBL login",
+                                    style={"width": 200},
+                                    placeholder="Your EMBL login",
+                                    icon=DashIconify(icon="uiw:login"),
+                                )
+                            )
+                        ),
+                        html.Hr(),
+                        dbc.Row(datatable),
+                        dbc.Row(
+                            [
+                                # dbc.Button(
+                                #     "Save", id="save-button", style={"width": "10%", "align": "center"}
+                                # ),
+                                html.Hr(),
+                                dmc.Center(
+                                    dmc.Button(
+                                        "Save",
+                                        id={
+                                            "type": "save-button",
+                                            "index": f"{selected_run}--{selected_sample}",
+                                        },
+                                        radius="xl",
+                                        variant="filled",
+                                        color="green",
+                                        n_clicks=0,
+                                        size="xl",
+                                        leftIcon=DashIconify(icon="bxs:save"),
+                                        style={
+                                            "width": "20%",
+                                            "align": "center",
+                                            # "height": "100%",
+                                        },
+                                    )
+                                ),
+                                modal_save_success,
+                            ]
+                        ),
+                    ],
+                    id={
+                        "type": "offcanvas",
+                        "index": f"{selected_run}--{selected_sample}",
+                    },
+                    is_open=False,
+                    title="Cell selection",
+                    backdrop=True,
+                    # header_style={"textAlign": "center"},
+                    style={"width": "50%"},
+                    placement="end",
+                )
+
+                # Load or set default settings/data for various components
+                # TODO: move to config file
+                data_folder = config["data"]["data_folder"]
+                belvedere_json_path = f"{data_folder}/{selected_run}/{selected_sample}/config/strandscape.json"
+
+                if os.path.isfile(belvedere_json_path):
+                    sample_json = json.load(open(belvedere_json_path))
+                    if "stored-selectedRows" not in sample_json:
+                        print(df.loc[(df["prediction"] == 1) & (df["pass1"] == 1)])
+                        sample_json["stored-selectedRows"] = df.loc[
+                            (df["prediction"] == 1) & (df["pass1"] == 1)
+                        ].to_dict("records")
+                else:
+                    sample_json = {
+                        "stored-report-button-ashleys": 0,
+                        "stored-save-button": {
+                            "n_clicks": 0,
+                            "run_mosaicatcher_disabled": True,
+                        },
+                        "stored-selectedRows": df.loc[
+                            (df["prediction"] == 1) & (df["pass1"] == 1)
+                        ].to_dict("records"),
+                        "stored-homepage-button": 0,
+                        "stored-report-button-mosaicatcher": 0,
+                        "stored-run-mosaicatcher-button": {
+                            "n_clicks": 0,
+                            "disabled": True,
+                        },
+                    }
+
+                # Store settings/data for various components
+                stored_components_buttons = html.Div(
+                    [
+                        dcc.Store(
+                            id={
+                                "type": "stored-refresh-button-samplewise",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            data=0,
+                            # data=sample_json["stored-refresh-button-samplewise"],
+                            storage_type="session",
+                        ),
+                        dcc.Store(
+                            id={
+                                "type": "invisible-output",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            data=0,
+                            # data=sample_json["stored-refresh-button-samplewise"],
+                            storage_type="session",
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-report-button-ashleys",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data=0,
+                            data=sample_json["stored-report-button-ashleys"],
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-save-button",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data={"n_clicks": 0, "run_mosaicatcher_disabled": True},
+                            data=sample_json["stored-save-button"],
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-selectedRows",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data=df.loc[
+                            #     (df["prediction"] == 1) & (df["pass1"] == 1)
+                            # ].to_dict("records"),
+                            data=sample_json["stored-selectedRows"],
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-homepage-button",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data=0,
+                            data=sample_json["stored-homepage-button"],
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-report-button-mosaicatcher",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data=0,
+                            data=sample_json["stored-report-button-mosaicatcher"],
+                        ),
+                        dcc.Store(
+                            {
+                                "type": "stored-run-mosaicatcher-button",
+                                "index": f"{selected_run}--{selected_sample}",
+                            },
+                            storage_type="session",
+                            # data={"n_clicks": 0, "disabled": True},
+                            data=sample_json["stored-run-mosaicatcher-button"],
+                        ),
+                    ]
+                )
+
+                # Create main action buttons (e.g., Save, Refresh, etc.)
+                buttons = dmc.Center(
+                    dmc.Group(
+                        [
+                            dmc.Button(
+                                "Homepage",
+                                id={
+                                    "type": "homepage-button",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                radius="xl",
+                                variant="gradient",
+                                n_clicks=0,
+                                size="sm",
+                                leftIcon=DashIconify(icon="mdi:home"),
+                            ),
+                            dmc.Button(
+                                "Display report",
+                                # "Display Ashleys-QC report",
+                                id={
+                                    "type": "report-button-ashleys",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                radius="xl",
+                                color="pink",
+                                size="sm",
+                                n_clicks=0,
+                                disabled=True,
+                                leftIcon=DashIconify(icon="mdi:eye"),
+                            ),
+                            dmc.Button(
+                                "Cell selection",
+                                id={
+                                    "type": "open-button",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                radius="xl",
+                                n_clicks=0,
+                                color="orange",
+                                disabled=True,
+                                size="sm",
+                                leftIcon=DashIconify(icon="mdi:hand-tap"),
+                            ),
+                            dmc.Button(
+                                "Run MosaiCatcher",
+                                id={
+                                    "type": "run-mosaicatcher-button",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                radius="xl",
+                                color="red",
+                                n_clicks=0,
+                                disabled=True,
+                                size="sm",
+                                leftIcon=DashIconify(
+                                    icon="ooui:logo-wikimedia-discovery"
+                                ),
+                                style={"display": "none"},
+                            ),
+                            dmc.Button(
+                                "Display MosaiCatcher report",
+                                id={
+                                    "type": "report-button-mosaicatcher",
+                                    "index": f"{selected_run}--{selected_sample}",
+                                },
+                                radius="xl",
+                                n_clicks=0,
+                                color="grape",
+                                disabled=True,
+                                size="sm",
+                                leftIcon=DashIconify(icon="mdi:eye"),
+                                style={"display": "none"},
+                            ),
+                        ],
+                    )
+                )
+
+                content = [
+                    stored_components_buttons,
+                    buttons,
+                    html.Hr(),
+                    html.Div(
+                        id={
+                            "type": "run-sample-container",
+                            "index": f"{selected_run}--{selected_sample}",
+                        }
+                    ),
+                    offcanvas,
+                ]
+
+            elif not files_available:
+                content = html.Div(
+                    [
+                        html.H1(
+                            "No data available",
+                            className="text-danger",
+                        ),
+                        html.H5(
+                            f"No data available yet for {selected_run} - {selected_sample}, please come back later.",
+                            className="text-danger",
+                        ),
+                    ],
+                    style=CONTENT_STYLE,
+                )
+
+            else:
+                content = list()
 
             # Assemble the main report view for a selected run and sample
             report_wise_div = html.Div(
@@ -854,16 +901,7 @@ def fill_sample_wise_container(url):
                         ),
                     ),
                     html.Hr(),
-                    stored_components_buttons,
-                    buttons,
-                    html.Hr(),
-                    html.Div(
-                        id={
-                            "type": "run-sample-container",
-                            "index": f"{selected_run}--{selected_sample}",
-                        }
-                    ),
-                    offcanvas,
+                    html.Div(content),
                 ]
             )
 
