@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  namespace: tenant-panoptes-service  # Use your specific namespace
+  # annotations:
+  #   traefik.ingress.kubernetes.io/router.tls.certresolver: sectigo
+    # Specify the ingress class if required by your cluster
+    # kubernetes.io/ingress.class: "internal-users"  # or "internal-users" based on your need
+
+spec:
+  ingressClassName: "internal-users"  # Add this if your cluster uses the new Ingress class specification
+  rules:
+    - host: test-panoptes.embl.de
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: panoptes
+                port:
+                  number: 80

@@ -13,8 +13,8 @@ spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
   ports:
-    - name: "8058"
-      port: 8058
+    - protocol: TCP
+      port: 80
       targetPort: 8058
   selector:
     io.kompose.service: panoptes

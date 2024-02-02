@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yaml
+    kompose.version: 1.30.0 (HEAD)
+  labels:
+    io.kompose.service: panoptes
+  name: panoptes
+  namespace: tenant-panoptes-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: panoptes
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yaml
+        kompose.version: 1.30.0 (HEAD)
+      labels:
+        io.kompose.network/kompose-default: "true"
+        io.kompose.service: panoptes
+    spec:
+      containers:
+        - args:
+            - panoptes
+            - -v
+            - --port
+            - "8058"
+          image: quay.io/biocontainers/panoptes-ui:0.2.3--pyh7cba7a3_0
+          name: panoptes
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8058
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          volumeMounts:
+            - mountPath: /data
+              name: panoptes-claim0
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: panoptes-claim0
+          persistentVolumeClaim:
+            claimName: panoptes-claim0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yaml
+    kompose.version: 1.30.0 (HEAD)
+  labels:
+    io.kompose.service: panoptes
+  name: panoptes
+  namespace: tenant-panoptes-service
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8058
+  selector:
+    io.kompose.service: panoptes
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  namespace: tenant-panoptes-service
+spec:
+  ingressClassName: "internal-users"
+  rules:
+    - host: test-panoptes.embl.de
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: panoptes
+                port:
+                  number: 80
