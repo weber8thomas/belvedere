@@ -400,7 +400,9 @@ def process_directories(
     unwanted = ["._.DS_Store", ".DS_Store", "config"]
 
     if ref_df.empty is False:
-        ref_df_plates = ref_df["plate"].unique().tolist()
+        ref_df_plates = (
+            ref_df.loc[ref_df["status"] != "To process"]["run_path"].unique().tolist()
+        )
     else:
         ref_df_plates = []
 
@@ -429,9 +431,10 @@ def process_directories(
     # exclude plates from the ref_df in the total_list_runs
     print(total_list_runs)
     print("EXCLUDE")
+    print(ref_df_plates)
 
-    # total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
-    # print(total_list_runs)
+    total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
+    print(total_list_runs)
 
     for directory_path in total_list_runs:
         print(directory_path)
@@ -480,6 +483,7 @@ def check_unprocessed_folder():
         ref_df = pd.DataFrame()
         print("No ref df")
 
+    print(ref_df.empty)
     # Get the list of excluded samples from the config
     config = load_config("watchdog_pipeline/excluded_samples.yaml")
     # TODO: add run in the excluded list
@@ -499,15 +503,23 @@ def check_unprocessed_folder():
     pd.options.display.max_rows = 999
     pd.options.display.max_colwidth = 70
     print(main_df)
+    mosaitrigger = False
 
-    if ref_df.empty is False:
+    if ref_df.empty is True:
+        main_df.to_csv(ref_df_path, sep="\t", index=False)
+        ref_df = main_df.copy()
+
+    if main_df.empty is False:
         # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
+
         main_df_to_process = (
             main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
             .drop_duplicates()
             .set_index("plate")
             .to_dict("index")
         )
+
+        print("main_df_to_process")
         print(main_df_to_process)
         ref_df_to_process = (
             ref_df.loc[
@@ -518,26 +530,37 @@ def check_unprocessed_folder():
             .set_index("plate")
             .to_dict("index")
         )
-        for plate, folder_hash in main_df_to_process.items():
-            if plate in ref_df_to_process:
-                print(
-                    plate,
-                    folder_hash["folder_hash"],
-                    ref_df_to_process[plate]["folder_hash"],
-                )
-                if (
-                    folder_hash["folder_hash"]
-                    != ref_df_to_process[plate]["folder_hash"]
-                ):
-                    main_df.loc[
-                        main_df["plate"] == plate, "status"
-                    ] = "Copy not complete"
-                # else:
-                #     main_df.loc[main_df["plate"] == plate, "status"] = "To process (2)"
+        print("ref_df_to_process")
+        print(ref_df_to_process)
+        if ref_df_to_process:
+            for run, folder_hash in main_df_to_process.items():
+                if run in ref_df_to_process:
+                    print(
+                        run,
+                        folder_hash["folder_hash"],
+                        ref_df_to_process[run]["folder_hash"],
+                    )
+                    if (
+                        folder_hash["folder_hash"]
+                        != ref_df_to_process[run]["folder_hash"]
+                    ):
+                        main_df.loc[main_df["plate"] == run, "status"] = (
+                            "Copy not complete"
+                        )
+                    else:
+                        mosaitrigger = True
+                        print("Same hash, good to go!")
+        else:
 
-    print(main_df)
+            concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
+            concat_df.to_csv(ref_df_path, sep="\t", index=False)
+            print(concat_df)
 
-    main_df.to_csv(ref_df_path, sep="\t", index=False)
+    else:
+        print("No differences between ref_df and main_df")
+
+    # print(ref_df)
+    # print(main_df)
 
     # print(main_df)
     # exit()
@@ -597,7 +620,7 @@ def check_unprocessed_folder():
 
     dry_run_db = False
 
-    if dry_run_db is False:
+    if mosaitrigger is True:
         # cursor = connection.cursor()
 
         # assert (
@@ -871,6 +894,9 @@ def execute_command(
 
     # Change directory and run the snakemake command
     date_folder = directory_path.split("/")[-1]
+    genecore_prefix = "/".join(directory_path.split("/")[:-1])
+    print(date_folder)
+    print(directory_path)
 
     ashleys_pipeline_only = True if pipeline == "ashleys-qc-pipeline" else False
 
@@ -879,12 +905,14 @@ def execute_command(
     )
 
     year = date_folder.split("-")[0]
-    genecore_prefix_new_version = "/".join(directory_path.split("/")[:-1])
-    genecore_prefix = (
-        f"{genecore_prefix_new_version}/{year}"
-        if str(year) in ["2023", "2024"]
-        else paths_to_watch[0]
-    )
+    # genecore_prefix_new_version = "/".join(directory_path.split("/")[:-1])
+    # genecore_prefix = (
+    #     f"{genecore_prefix_new_version}/{year}"
+    #     if str(year) in ["2023", "2024"]
+    #     else paths_to_watch[0]
+    # )
+
+    # genecore_prefix = directory_path
 
     cmd = [
         f"{snakemake_binary}",
@@ -997,7 +1025,7 @@ def run_second_command(
     # print(cmd + profile_slurm + report_options)
 
     os.makedirs(
-        f"watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}", exist_ok=True
+        f"./watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}", exist_ok=True
     )
 
     # Get the current date and time
@@ -1017,7 +1045,7 @@ def run_second_command(
 
         logging.info("Running command: %s", " ".join(final_cmd))
 
-        log_file = f"/g/korbel2/weber/workspace/mosaicatcher-update/watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}/{current_time}.log"
+        log_file = f"./watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}/{current_time}.log"
         with open(log_file, "w") as f:
             logging.info(f"Writing execution log to: {log_file}")
             # process2 = subprocess.Popen(cmd + wms_monitor_args + profile_dry_run, stdout=f, stderr=f, universal_newlines=True, cwd=working_directory, env=my_env)
@@ -1056,9 +1084,9 @@ def run_second_command(
     ashleys_pipeline_only_real = True if pipeline == "ashleys-qc-pipeline" else False
     print(cmd)
     # Replace ashleys_pipeline_only in cmd by getting index of the element and replacing it
-    cmd[
-        cmd.index(f"ashleys_pipeline_only={ashleys_pipeline_only_real}")
-    ] = f"ashleys_pipeline_only={ashleys_pipeline_only_updated}"
+    cmd[cmd.index(f"ashleys_pipeline_only={ashleys_pipeline_only_real}")] = (
+        f"ashleys_pipeline_only={ashleys_pipeline_only_updated}"
+    )
 
     report_location = f"{publishdir_location}/{date_folder}/{sample}/reports/{sample}_mosaicatcher-pipeline_report.zip"
     report_options = [
@@ -1079,7 +1107,7 @@ def run_second_command(
         "Running command: %s", " ".join(cmd + profile_dry_run + report_options)
     )
 
-    log_file = f"/g/korbel2/weber/workspace/mosaicatcher-update/watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}/{current_time}_report.log"
+    log_file = f"./watchdog/logs/per-run/{pipeline}/{date_folder}/{sample}/{current_time}_report.log"
     with open(log_file, "w") as f:
         logging.info(f"Writing report execution log to: {log_file}")
 

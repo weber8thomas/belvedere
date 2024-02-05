@@ -38,6 +38,9 @@ def extract_samples_names(l, directory_path):
             sample_name = match.group(1)
             file_counts_per_sample[sample_name] += 1
 
+    # print(directory_path)
+    # print(file_counts_per_sample)
+
     # Second pass: Process files and determine plate type per sample
     for j, file_path in enumerate(sorted(l)):
         match = pattern.search(file_path)
@@ -62,7 +65,6 @@ def extract_samples_names(l, directory_path):
                 plate = directory_path.split("/")[-1]
                 samples.append(sample_name)
                 plate_types.append(plate_type)
-
     # Compute the hash at the folder level
     hash = hashlib.sha256()
     # List all files in the directory and sort them
@@ -90,23 +92,23 @@ def process_sample(
     data_location,
     publishdir_location,
     variable,
-    workflows_data,
-    last_message_timestamp,
     prefixes,
     plate_type,
+    path_to_watch,
     folder_hash,
+    config,
 ):
-    run_id = f"{pipeline}--{plate}--{sample_name}"
-    workflow_id = None
-    # workflow_id = find_workflow_id_by_name(workflows_data, run_id)
-
     dict_variables = {
         f"{variable}_scratch": False,
         f"{variable}_scratch_ts": False,
         f"{variable}_scratch_rdays": None,
         # f"aqc_report": False,
         f"mc_report": False,
+        "mm10": False,
     }
+
+    if sample_name in config["tagged_samples"]["mm10"]:
+        dict_variables["mm10"] = True
 
     if os.path.isfile(
         f"{publishdir_location}/{plate}/{sample_name}/reports/{sample_name}_{pipeline}_report.zip"
@@ -116,27 +118,6 @@ def process_sample(
 
         dict_variables[f"{variable}_report"] = True
 
-    # if pipeline == "ashleys-qc-pipeline":
-    if os.path.isfile(
-        f"{data_location}/{plate}/{sample_name}/config/ashleys_final_results.ok"
-        # f"{data_location}/{plate}/{sample_name}/multiqc/multiqc_report/multiqc_report.html"
-    ):
-        # ashleys_final_scratch = True
-        ts = os.path.getmtime(
-            f"{data_location}/{plate}/{sample_name}/config/ashleys_final_results.ok"
-        )
-        ts = datetime.fromtimestamp(ts)
-        dict_variables[f"{variable}_scratch"] = True
-        dict_variables[f"{variable}_scratch_ts"] = ts
-
-        # to datetime and then strfmtime
-
-        # computing remaning days to reach 5 months between ashleys_final_scratch_timestamp and now
-        rdays = (datetime.now() - ts).days
-        rdays = 150 - rdays
-
-        dict_variables[f"{variable}_scratch_rdays"] = rdays
-    # elif pipeline == "mosaicatcher-pipeline":
     info_file = f"{data_location}/{plate}/{sample_name}/counts/{sample_name}.info"
     nb_usable_cells = None
     snp_file = f"{data_location}/{plate}/{sample_name}/snv_calls/check_SNVs_nb.txt"
@@ -144,82 +125,103 @@ def process_sample(
 
     if os.path.isfile(info_file):
         nb_usable_cells = pd.read_csv(info_file, sep="\t", skiprows=13).shape[0]
+        ts = os.path.getmtime(info_file)
+        ts = datetime.fromtimestamp(ts)
+        dict_variables[f"{variable}_scratch_ts"] = ts
+        # to datetime and then strfmtime
+        # computing remaning days to reach 5 months between ashleys_final_scratch_timestamp and now
+        rdays = (datetime.now() - ts).days
+        rdays = 150 - rdays
+        dict_variables[f"{variable}_scratch_rdays"] = rdays
 
     if os.path.isfile(snp_file):
         nb_snps = pd.read_csv(snp_file, sep="\t")
         check_snp = nb_snps.loc[nb_snps["SNP_nb"] > 100].shape[0] == nb_snps.shape[0]
-        if os.path.isfile(
-            f"{data_location}/{plate}/{sample_name}/plots/final_results/{sample_name}.txt"
-            # f"{data_location}/{plate}/{sample_name}/multiqc/multiqc_report/multiqc_report.html"
-        ):
-            ts = os.path.getmtime(
-                f"{data_location}/{plate}/{sample_name}/plots/final_results/{sample_name}.txt"
-            )
-            ts = datetime.fromtimestamp(ts)
-            dict_variables[f"{variable}_scratch"] = True
-            dict_variables[f"{variable}_scratch_ts"] = ts
-            # to datetime and then strfmtime
-            # computing remaning days to reach 5 months between ashleys_final_scratch_timestamp and now
-            rdays = (datetime.now() - ts).days
-            rdays = 150 - rdays
 
-            dict_variables[f"{variable}_scratch_rdays"] = rdays
+    if os.path.isfile(
+        f"{data_location}/{plate}/{sample_name}/plots/final_results/{sample_name}.txt"
+        # f"{data_location}/{plate}/{sample_name}/multiqc/multiqc_report/multiqc_report.html"
+    ):
+        dict_variables[f"{variable}_scratch"] = True
 
-    if not workflow_id:
-        workflow_id = {
-            "id": "None",
-            "status": "None",
-            # "started_at": last_message_timestamp,
-            # "completed_at": last_message_timestamp,
-            # "jobs_done": "None",
-            # "jobs_total": "None",
-        }
-    # else:
-    #     workflow_id["started_at"] = datetime.strptime(
-    #         workflow_id["started_at"],
-    #         "%a, %d %b %Y %H:%M:%S GMT",
-    #     ).strftime("%Y-%m-%d %H:%M:%S.%f")
+    year = plate.split("-")[0]
+    run_path = (
+        f"{path_to_watch}/{year}/{plate}"
+        if year in ["2023", "2024"]
+        else f"{path_to_watch}/{plate}"
+    )
 
-    #     if workflow_id["completed_at"] is not None:
-    #         workflow_id["completed_at"] = datetime.strptime(
-    #             workflow_id["completed_at"],
-    #             "%a, %d %b %Y %H:%M:%S GMT",
-    #         ).strftime("%Y-%m-%d %H:%M:%S.%f")
+    # Compute status
+    status = None
+    if (
+        dict_variables[f"mc_report"] is True
+        and dict_variables[f"{variable}_scratch"] is True
+    ):
+        status = "Completed"
+    elif (
+        dict_variables[f"mc_report"] is True
+        and dict_variables[f"{variable}_scratch"] is False
+        and nb_usable_cells is None
+    ):
+        status = "Error"
+    # elif (
+    #     dict_variables[f"mc_report"] is False
+    #     and dict_variables[f"{variable}_scratch"] is False
+    #     # and nb_usable_cells is not None
+    #     # and nb_usable_cells > 5
+    # ):
+    #     status = "To process"
+    elif (
+        dict_variables[f"mc_report"] is True
+        and dict_variables[f"{variable}_scratch"] is False
+        and nb_usable_cells is not None
+        and nb_usable_cells <= 5
+    ):
+        status = "Too low nb of cells"
+    elif dict_variables[f"mc_report"] is False and (
+        dict_variables[f"{variable}_scratch"] is True
+    ):
+        status = "MC Report missing"
+    elif dict_variables[f"mc_report"] is False and (nb_usable_cells is not None):
+        status = "AQC Report missing"
+
+    elif plate_type % 96 != 0:
+        status = "Non canonical plate"
+
+    else:
+        status = "To process"
+
+    if dict_variables["mm10"] is True:
+        status = "mm10 sample"
 
     # turn the print into a dict
     tmp_d = {
-        "panoptes_id": workflow_id["id"],
         "plate": plate,
         "sample": sample_name,
-        # "report_aqc": dict_variables[f"aqc_report"],
         "report_mc": dict_variables[f"mc_report"],
         "final_output_scratch": dict_variables[f"{variable}_scratch"],
         "nb_usable_cells": nb_usable_cells,
         "check_snp": check_snp,
         "scratch_ts": dict_variables[f"{variable}_scratch_ts"],
         "scratch_rdays": dict_variables[f"{variable}_scratch_rdays"],
-        # "status": workflow_id["status"],
         "prefix": list(prefixes)[0],
         "plate_type": plate_type,
         "folder_hash": folder_hash,
-        # "started_at": workflow_id["started_at"],
-        # "completed_at": workflow_id["completed_at"],
-        # "jobs_done": workflow_id["jobs_done"],
-        # "jobs_total": workflow_id["jobs_total"],
+        "run_path": run_path,
+        "mm10": dict_variables["mm10"],
+        "status": status,
     }
     return tmp_d
 
 
 # Main function to process directories
 def process_directories(
-    main_path_to_watch,
-    excluded_samples,
+    paths_to_watch,
+    config,
     pipeline,
     data_location,
     publishdir_location,
     variable,
-    workflows_data,
-    last_message_timestamp,
     ref_df,
 ):
     unwanted = ["._.DS_Store", ".DS_Store", "config"]
@@ -230,17 +232,19 @@ def process_directories(
         ref_df_plates = []
 
     main_df = []
-    # if len(workflows_data) > 0:
     total_list_runs = []
 
+    # if len(workflows_data) > 0:
     for path_to_watch in paths_to_watch:
         if path_to_watch == "/g/korbel/STOCKS/Data/Assay/sequencing":
             for year in os.listdir(path_to_watch):
+                print(year)
                 if year.startswith(
                     "20"
                 ):  # Assuming directories starting with "20" are years
                     year_path = os.path.join(path_to_watch, year)
                     for folder in os.listdir(year_path):
+                        # if folder.startswith("2024-01-22-H2F3YAFX7"):
                         folder_path = os.path.join(year_path, folder)
                         if os.path.isdir(folder_path) and folder not in unwanted:
                             total_list_runs.append(folder_path)
@@ -252,9 +256,10 @@ def process_directories(
     # exclude plates from the ref_df in the total_list_runs
     print(total_list_runs)
     print("EXCLUDE")
+    print(ref_df_plates)
 
-    total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
-    print(total_list_runs)
+    # total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
+    # print(total_list_runs)
 
     for directory_path in total_list_runs:
         print(directory_path)
@@ -262,115 +267,111 @@ def process_directories(
             glob.glob(f"{directory_path}/*.txt.gz"),
             directory_path,
         )
-        print(
-            f"Samples: {samples}, Prefixes: {prefixes}, Plate Types: {plate_types}, Folder Hash: {folder_hash}"
-        )
 
         if len(set(prefixes)) == 1:
             for sample_name, plate_type in zip(samples, plate_types):
-                if sample_name not in excluded_samples:
-                    os.makedirs(
-                        f"{publishdir_location}/{os.path.basename(directory_path)}/{sample_name}/reports",
-                        exist_ok=True,
-                    )
-                    result = process_sample(
-                        sample_name,
-                        os.path.basename(directory_path),
-                        pipeline,
-                        data_location,
-                        publishdir_location,
-                        variable,
-                        workflows_data,
-                        last_message_timestamp,
-                        prefixes,
-                        plate_type,
-                        # path_to_watch,
-                        folder_hash,
-                    )
-                    main_df.append(result)
+                # if sample_name not in config["excluded_samples"]:
+                os.makedirs(
+                    f"{publishdir_location}/{os.path.basename(directory_path)}/{sample_name}/reports",
+                    exist_ok=True,
+                )
+                result = process_sample(
+                    sample_name,
+                    os.path.basename(directory_path),
+                    pipeline,
+                    data_location,
+                    publishdir_location,
+                    variable,
+                    prefixes,
+                    plate_type,
+                    path_to_watch,
+                    folder_hash,
+                    config,
+                )
+                main_df.append(result)
     return pd.DataFrame(main_df)
 
 
 def check_unprocessed_folder():
-    last_message_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
-    pipeline = "mosaicatcher-pipeline"
-    main_path_to_watch = "/g/korbel/STOCKS/Data/Assay/sequencing"
     data_location = "/scratch/tweber/DATA/MC_DATA/STOCKS"
+    # publishdir_location = "/g/korbel/weber/TMP/WORKFLOW_RESULTS_DEV"
     publishdir_location = "/g/korbel/WORKFLOW_RESULTS"
+    pipeline = "mosaicatcher-pipeline"
+
+    ref_df_path = "watchdog/processing_status.tsv"
+
+    if os.path.isfile(ref_df_path):
+        ref_df = pd.read_csv(ref_df_path, sep="\t")
+        print("Ref df")
+        # get timestamp
+        ref_df_ts = os.path.getmtime(ref_df_path)
+        ref_df_ts = datetime.fromtimestamp(ref_df_ts)
+        print(ref_df_ts)
+        print(ref_df)
+
+    else:
+        ref_df = pd.DataFrame()
+        print("No ref df")
+
+    # Get the list of excluded samples from the config
+    config = load_config("watchdog_pipeline/excluded_samples.yaml")
+    # TODO: add run in the excluded list
 
     variable = "aqc" if pipeline == "ashleys-qc-pipeline" else "mc"
 
-    # Get the list of excluded samples from the config
-    config = load_config("excluded_samples.yaml")
-    # TODO: add run in the excluded list
-    excluded_samples = config["excluded_samples"]
-
-    ref_df_file = "ref_test.tsv"
-
-    # if os.path.isfile(ref_df_file):
-    #     print("READING")
-    #     ref_df = pd.read_csv(ref_df_file, sep="\t")
-    #     print(ref_df)
-    #     # exit()
-
-    # else:
-    ref_df = pd.DataFrame()
-
-    # save output to json file
     main_df = process_directories(
-        main_path_to_watch,
-        excluded_samples,
+        paths_to_watch,
+        config,
         pipeline,
         data_location,
         publishdir_location,
         variable,
-        [],
-        last_message_timestamp,
         ref_df,
     )
 
     pd.options.display.max_rows = 999
     pd.options.display.max_colwidth = 70
-
-    main_df = pd.DataFrame(main_df)
-    # main_df.loc[(main_df["labels"] == True) &  (main_df["report"] == True), "real_status"] = "Completed"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == True) & (main_df["report_mc"] == False),
-    #     "real_status",
-    # ] = "MC Report missing"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == False) & (main_df["report_mc"] == True),
-    #     "real_status",
-    # ] = "Error"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == False) & (main_df["report_mc"] == False),
-    #     "real_status",
-    # ] = "To process"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == True)
-    #     & (main_df["report_mc"] == True)
-    #     & (main_df["status"] == "None"),
-    #     "real_status",
-    # ] = "Error"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == True)
-    #     & (main_df["report_mc"] == True)
-    #     & (main_df["status"] == "Running"),
-    #     "real_status",
-    # ] = "Running"
-    # main_df.loc[
-    #     (main_df["final_output_scratch"] == True)
-    #     & (main_df["report_mc"] == True)
-    #     & (main_df["status"] == "Done"),
-    #     "real_status",
-    # ] = "Completed"
-    # main_df["real_status"] = main_df["real_status"].fillna("Error (to  investigate))")
-    # print(workflows_data["workflows"])
-    main_df = main_df.sort_values(by=["plate", "sample"])
     print(main_df)
 
-    main_df.to_csv("ref_test.tsv", sep="\t", index=False)
+    if ref_df.empty is False:
+        # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
+        main_df_to_process = (
+            main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
+            .drop_duplicates()
+            .set_index("plate")
+            .to_dict("index")
+        )
+        print(main_df_to_process)
+        ref_df_to_process = (
+            ref_df.loc[
+                ref_df["plate"].isin(list(main_df_to_process.keys())),
+                ["plate", "folder_hash"],
+            ]
+            .drop_duplicates()
+            .set_index("plate")
+            .to_dict("index")
+        )
+        for plate, folder_hash in main_df_to_process.items():
+            if plate in ref_df_to_process:
+                print(
+                    plate,
+                    folder_hash["folder_hash"],
+                    ref_df_to_process[plate]["folder_hash"],
+                )
+                if (
+                    folder_hash["folder_hash"]
+                    != ref_df_to_process[plate]["folder_hash"]
+                ):
+                    main_df.loc[main_df["plate"] == plate, "status"] = (
+                        "Copy not complete"
+                    )
+                # else:
+                #     main_df.loc[main_df["plate"] == plate, "status"] = "To process (2)"
+
+    print(main_df)
+
+    main_df.to_csv(ref_df_path, sep="\t", index=False)
 
     # print("\n")
     # logging.info(f"Pipeline selected {pipeline}")
