@@ -413,7 +413,7 @@ def process_directories(
     for path_to_watch in paths_to_watch:
         if path_to_watch == "/g/korbel/STOCKS/Data/Assay/sequencing":
             for year in os.listdir(path_to_watch):
-                print(year)
+                # print(year)
                 if year.startswith(
                     "20"
                 ):  # Assuming directories starting with "20" are years
@@ -429,15 +429,15 @@ def process_directories(
                     total_list_runs.append(os.path.join(path_to_watch, e))
 
     # exclude plates from the ref_df in the total_list_runs
-    print(total_list_runs)
-    print("EXCLUDE")
-    print(ref_df_plates)
+    # print(total_list_runs)
+    # print("EXCLUDE")
+    # print(ref_df_plates)
 
     total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
-    print(total_list_runs)
+    # print(total_list_runs)
 
     for directory_path in total_list_runs:
-        print(directory_path)
+        # print(directory_path)
         prefixes, samples, plate_types, folder_hash = extract_samples_names(
             glob.glob(f"{directory_path}/*.txt.gz"),
             directory_path,
@@ -472,18 +472,18 @@ def check_unprocessed_folder():
 
     if os.path.isfile(ref_df_path):
         ref_df = pd.read_csv(ref_df_path, sep="\t")
-        print("Ref df")
+        logging.info("Ref df")
         # get timestamp
         ref_df_ts = os.path.getmtime(ref_df_path)
         ref_df_ts = datetime.fromtimestamp(ref_df_ts)
-        print(ref_df_ts)
+        logging.info(ref_df_ts)
         print(ref_df)
 
     else:
         ref_df = pd.DataFrame()
         print("No ref df")
 
-    print(ref_df.empty)
+    # print(ref_df.empty)
     # Get the list of excluded samples from the config
     config = load_config("watchdog_pipeline/excluded_samples.yaml")
     # TODO: add run in the excluded list
@@ -502,6 +502,7 @@ def check_unprocessed_folder():
 
     pd.options.display.max_rows = 999
     pd.options.display.max_colwidth = 70
+    logging.info("main_df")
     print(main_df)
     mosaitrigger = False
 
@@ -519,7 +520,7 @@ def check_unprocessed_folder():
             .to_dict("index")
         )
 
-        print("main_df_to_process")
+        logging.info("main_df_to_process")
         print(main_df_to_process)
         ref_df_to_process = (
             ref_df.loc[
@@ -530,7 +531,7 @@ def check_unprocessed_folder():
             .set_index("plate")
             .to_dict("index")
         )
-        print("ref_df_to_process")
+        logging.info("ref_df_to_process")
         print(ref_df_to_process)
         if ref_df_to_process:
             for run, folder_hash in main_df_to_process.items():
@@ -557,7 +558,7 @@ def check_unprocessed_folder():
             print(concat_df)
 
     else:
-        print("No differences between ref_df and main_df")
+        logging.info("No differences between ref_df and main_df")
 
     # print(ref_df)
     # print(main_df)
