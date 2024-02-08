@@ -13,6 +13,20 @@ import json
 from config import load_config
 import yaml
 
+
+# Setup the logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(
+            "watchdog/logs/watchdog_ashleys_publisher.log"
+        ),  # File handler to log to a file
+        logging.StreamHandler(),  # Stream handler to log to the console
+    ],
+)
+
+
 config = load_config()
 
 
@@ -82,6 +96,119 @@ def extract_samples_names(l, directory_path):
     folder_hash = hash.hexdigest()
 
     return prefixes, samples, plate_types, folder_hash
+
+
+def extract_samples_names(l, directory_path):
+    samples = list()
+    prefixes = list()
+    plate_types = list()
+
+    pattern = re.compile(r"_lane1(.*?)(iTRU|PE20)(.*?)([A-H]?)(\d{2})(?:_1_|_2_)")
+
+    # First pass: Count occurrences of each sample_name
+    file_counts_per_sample = collections.Counter()
+    for file_path in l:
+        match = pattern.search(file_path)
+        if match:
+            sample_name = match.group(1)
+            file_counts_per_sample[sample_name] += 1
+
+    # print(directory_path)
+    # print(file_counts_per_sample)
+
+    # Second pass: Process files and determine plate type per sample
+    for j, file_path in enumerate(sorted(l)):
+        match = pattern.search(file_path)
+        if match:
+            sample_name = match.group(1)
+
+            file_count = file_counts_per_sample[sample_name]
+
+            # Determine plate type using modulo 96 operation
+            if file_count % 96 != 0:
+                # raise ValueError(
+                print(
+                    f"Invalid file count for sample {sample_name} with file count {file_count}. Must be a multiple of 96."
+                )
+                continue
+            plate_type = int(file_count / 2)
+
+            if (j + 1) % file_count == 0:
+                if not sample_name or len(sample_name) == 0:
+                    continue
+                prefixes.append(match.group(2))
+                plate = directory_path.split("/")[-1]
+                samples.append(sample_name)
+                plate_types.append(plate_type)
+    # Compute the hash at the folder level
+    hash = hashlib.sha256()
+    # List all files in the directory and sort them
+    files = glob.glob(f"{directory_path}/*")
+    files.sort()
+    # Loop over the sorted list of files and update the hash
+    for file in files:
+        # Get file attributes: name, modification timestamp, and size
+        stats = os.stat(file)
+        file_info = f"{os.path.basename(file)}-{stats.st_mtime}-{stats.st_size}"
+
+        hash.update(file_info.encode("utf-8"))
+
+    # Get the final hash value in hexadecimal format
+    folder_hash = hash.hexdigest()
+
+    return prefixes, samples, plate_types, folder_hash
+
+
+def check_date(plate):
+    from datetime import datetime, timedelta
+
+    date_str = "-".join(plate.split("-")[:-1])
+    date_format = "%Y-%m-%d"
+    folder_date = datetime.strptime(date_str, date_format)
+
+    # Calculate the date that is 6 months before today
+    six_months_ago = datetime.now() - timedelta(
+        days=3 * 30
+    )  # This assumes an average of 30 days in a month
+    # print(plate, six_months_ago, folder_date > six_months_ago)
+    # Compare dates
+    return folder_date > six_months_ago
+
+
+def load_from_json(filename: str):
+    """Load the data from the JSON file."""
+    try:
+        with open(filename, "r") as file:
+            data = json.load(file)
+        return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        # If the file does not exist or there's an error in reading it,
+        # return an empty dictionary or other default value
+        return {}
+
+
+def update_timestamps(directory):
+    """
+    Update the access and modification times of all files in the given directory and its subdirectories.
+
+    :param directory: Path to the directory
+    """
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".fastq.gz"):
+                continue
+            try:
+                file_path = Path(root) / file
+                current_time = time.time()
+                os.utime(file_path, (current_time, current_time))
+                logging.info(f"Updated timestamp for: {file_path}")
+            except FileNotFoundError:
+                logging.info(f"File not found: {file_path}")
+
+
+def load_config(file_path):
+    with open(file_path, "r") as file:
+        return yaml.safe_load(file)
 
 
 # Function to process each sample
@@ -227,7 +354,9 @@ def process_directories(
     unwanted = ["._.DS_Store", ".DS_Store", "config"]
 
     if ref_df.empty is False:
-        ref_df_plates = ref_df["plate"].unique().tolist()
+        ref_df_plates = (
+            ref_df.loc[ref_df["status"] != "To process"]["run_path"].unique().tolist()
+        )
     else:
         ref_df_plates = []
 
@@ -238,7 +367,7 @@ def process_directories(
     for path_to_watch in paths_to_watch:
         if path_to_watch == "/g/korbel/STOCKS/Data/Assay/sequencing":
             for year in os.listdir(path_to_watch):
-                print(year)
+                # print(year)
                 if year.startswith(
                     "20"
                 ):  # Assuming directories starting with "20" are years
@@ -254,15 +383,15 @@ def process_directories(
                     total_list_runs.append(os.path.join(path_to_watch, e))
 
     # exclude plates from the ref_df in the total_list_runs
-    print(total_list_runs)
-    print("EXCLUDE")
-    print(ref_df_plates)
+    # print(total_list_runs)
+    # print("EXCLUDE")
+    # print(ref_df_plates)
 
-    # total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
+    total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
     # print(total_list_runs)
 
     for directory_path in total_list_runs:
-        print(directory_path)
+        # print(directory_path)
         prefixes, samples, plate_types, folder_hash = extract_samples_names(
             glob.glob(f"{directory_path}/*.txt.gz"),
             directory_path,
@@ -293,30 +422,30 @@ def process_directories(
 
 
 def check_unprocessed_folder():
-
-    data_location = "/scratch/tweber/DATA/MC_DATA/STOCKS"
-    # publishdir_location = "/g/korbel/weber/TMP/WORKFLOW_RESULTS_DEV"
-    publishdir_location = "/g/korbel/WORKFLOW_RESULTS"
-    pipeline = "mosaicatcher-pipeline"
-
-    ref_df_path = "watchdog/processing_status.tsv"
+    ref_df_path = "watchdog/processing_status_publisher.tsv"
 
     if os.path.isfile(ref_df_path):
         ref_df = pd.read_csv(ref_df_path, sep="\t")
-        print("Ref df")
+        logging.info("Ref df")
         # get timestamp
         ref_df_ts = os.path.getmtime(ref_df_path)
         ref_df_ts = datetime.fromtimestamp(ref_df_ts)
-        print(ref_df_ts)
+        logging.info(ref_df_ts)
         print(ref_df)
 
     else:
         ref_df = pd.DataFrame()
         print("No ref df")
 
+    # print(ref_df.empty)
     # Get the list of excluded samples from the config
     config = load_config("watchdog_pipeline/excluded_samples.yaml")
     # TODO: add run in the excluded list
+
+    data_location = "/scratch/tweber/DATA/MC_DATA/STOCKS"
+    # publishdir_location = "/g/korbel/weber/TMP/WORKFLOW_RESULTS_DEV"
+    publishdir_location = "/g/korbel/WORKFLOW_RESULTS"
+    pipeline = "mosaicatcher-pipeline"
 
     variable = "aqc" if pipeline == "ashleys-qc-pipeline" else "mc"
 
@@ -332,52 +461,70 @@ def check_unprocessed_folder():
 
     pd.options.display.max_rows = 999
     pd.options.display.max_colwidth = 70
+    logging.info("main_df")
     print(main_df)
+    print(main_df.empty)
+    mosaitrigger = False
 
     if ref_df.empty is False:
-        # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
-        main_df_to_process = (
-            main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
-            .drop_duplicates()
-            .set_index("plate")
-            .to_dict("index")
-        )
-        print(main_df_to_process)
-        ref_df_to_process = (
-            ref_df.loc[
-                ref_df["plate"].isin(list(main_df_to_process.keys())),
-                ["plate", "folder_hash"],
-            ]
-            .drop_duplicates()
-            .set_index("plate")
-            .to_dict("index")
-        )
-        for plate, folder_hash in main_df_to_process.items():
-            if plate in ref_df_to_process:
-                print(
-                    plate,
-                    folder_hash["folder_hash"],
-                    ref_df_to_process[plate]["folder_hash"],
-                )
-                if (
-                    folder_hash["folder_hash"]
-                    != ref_df_to_process[plate]["folder_hash"]
-                ):
-                    main_df.loc[main_df["plate"] == plate, "status"] = (
-                        "Copy not complete"
-                    )
-                # else:
-                #     main_df.loc[main_df["plate"] == plate, "status"] = "To process (2)"
 
-    print(main_df)
+        if main_df.empty is False:
+            # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
 
-    main_df.to_csv(ref_df_path, sep="\t", index=False)
+            main_df_to_process = (
+                main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
+                .drop_duplicates()
+                .set_index("plate")
+                .to_dict("index")
+            )
 
-    # print("\n")
-    # logging.info(f"Pipeline selected {pipeline}")
-    print("\n")
+            logging.info("main_df_to_process")
+            print(main_df_to_process)
+            ref_df_to_process = (
+                ref_df.loc[
+                    ref_df["plate"].isin(list(main_df_to_process.keys())),
+                    ["plate", "folder_hash"],
+                ]
+                .drop_duplicates()
+                .set_index("plate")
+                .to_dict("index")
+            )
+            logging.info("ref_df_to_process")
+            print(ref_df_to_process)
+            if ref_df_to_process:
+                logging.info("if ref_df_to_process")
 
-    test_json = main_df.to_json(orient="records", date_format="iso")
+                for run, folder_hash in main_df_to_process.items():
+                    if run in ref_df_to_process:
+                        logging.info(
+                            run,
+                            folder_hash["folder_hash"],
+                            ref_df_to_process[run]["folder_hash"],
+                        )
+                        if (
+                            folder_hash["folder_hash"]
+                            != ref_df_to_process[run]["folder_hash"]
+                        ):
+                            main_df.loc[main_df["plate"] == run, "status"] = (
+                                "Copy not complete"
+                            )
+                        else:
+                            mosaitrigger = True
+                            logging.info("Same hash, good to go!")
+
+            else:
+
+                ref_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
+                ref_df.to_csv(ref_df_path, sep="\t", index=False)
+
+    else:
+        main_df.to_csv(ref_df_path, sep="\t", index=False)
+        ref_df = main_df.copy()
+        logging.info("No differences between ref_df and main_df")
+
+    print(ref_df)
+
+    test_json = ref_df.to_json(orient="records", date_format="iso")
 
     # print(pd.read_json(test_json, orient="records"))
     return test_json
@@ -472,7 +619,6 @@ if __name__ == "__main__":
         # Wf progress status - Panoptes
         data = check_unprocessed_folder()
         print(data)
-        exit()
         # data = fetch_data_from_api()
         if data != {}:
             print(config["panoptes"]["json_status_backup"])
@@ -498,14 +644,14 @@ if __name__ == "__main__":
             routing_key=config["data"]["rabbitmq"]["routing_key"],
         )
 
-        data_panoptes = fetch_data_from_api()
+        # data_panoptes = fetch_data_from_api()
 
-        publish_to_rabbitmq(
-            data=data_panoptes,
-            exchange="panoptes",
-            queue="data_panoptes",
-            routing_key="latest_panoptes",
-        )
+        # publish_to_rabbitmq(
+        #     data=data_panoptes,
+        #     exchange="panoptes",
+        #     queue="data_panoptes",
+        #     routing_key="latest_panoptes",
+        # )
 
         # Fetch every 30 seconds
-        time.sleep(25)
+        time.sleep(28)

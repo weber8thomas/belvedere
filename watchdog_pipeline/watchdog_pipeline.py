@@ -1,13 +1,9 @@
-import sqlite3
 import time
 import os, sys, glob, subprocess, re
-import numpy as np
-import requests
 from datetime import datetime
 import logging
 import json
 import pandas as pd
-import threading
 import re
 from collections import Counter
 from pathlib import Path
@@ -506,59 +502,63 @@ def check_unprocessed_folder():
     print(main_df)
     mosaitrigger = False
 
-    if ref_df.empty is True:
-        main_df.to_csv(ref_df_path, sep="\t", index=False)
-        ref_df = main_df.copy()
+    if ref_df.empty is False:
 
-    if main_df.empty is False:
-        # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
+        if main_df.empty is False:
+            # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
 
-        main_df_to_process = (
-            main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
-            .drop_duplicates()
-            .set_index("plate")
-            .to_dict("index")
-        )
+            main_df_to_process = (
+                main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
+                .drop_duplicates()
+                .set_index("plate")
+                .to_dict("index")
+            )
 
-        logging.info("main_df_to_process")
-        print(main_df_to_process)
-        ref_df_to_process = (
-            ref_df.loc[
-                ref_df["plate"].isin(list(main_df_to_process.keys())),
-                ["plate", "folder_hash"],
-            ]
-            .drop_duplicates()
-            .set_index("plate")
-            .to_dict("index")
-        )
-        logging.info("ref_df_to_process")
-        print(ref_df_to_process)
-        if ref_df_to_process:
-            for run, folder_hash in main_df_to_process.items():
-                if run in ref_df_to_process:
-                    print(
-                        run,
-                        folder_hash["folder_hash"],
-                        ref_df_to_process[run]["folder_hash"],
-                    )
-                    if (
-                        folder_hash["folder_hash"]
-                        != ref_df_to_process[run]["folder_hash"]
-                    ):
-                        main_df.loc[main_df["plate"] == run, "status"] = (
-                            "Copy not complete"
+            logging.info("main_df_to_process")
+            print(main_df_to_process)
+            ref_df_to_process = (
+                ref_df.loc[
+                    ref_df["plate"].isin(list(main_df_to_process.keys())),
+                    ["plate", "folder_hash"],
+                ]
+                .drop_duplicates()
+                .set_index("plate")
+                .to_dict("index")
+            )
+            logging.info("ref_df_to_process")
+            print(ref_df_to_process)
+            if ref_df_to_process:
+                logging.info("if ref_df_to_process")
+
+                for run, folder_hash in main_df_to_process.items():
+                    if run in ref_df_to_process:
+                        logging.info(
+                            run,
+                            folder_hash["folder_hash"],
+                            ref_df_to_process[run]["folder_hash"],
                         )
-                    else:
-                        mosaitrigger = True
-                        print("Same hash, good to go!")
-        else:
+                        if (
+                            folder_hash["folder_hash"]
+                            != ref_df_to_process[run]["folder_hash"]
+                        ):
+                            main_df.loc[main_df["plate"] == run, "status"] = (
+                                "Copy not complete"
+                            )
+                        else:
+                            mosaitrigger = True
+                            logging.info("Same hash, good to go!")
 
-            concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
-            concat_df.to_csv(ref_df_path, sep="\t", index=False)
-            print(concat_df)
+            else:
+
+                concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
+                concat_df.to_csv(ref_df_path, sep="\t", index=False)
 
     else:
+        main_df.to_csv(ref_df_path, sep="\t", index=False)
+        ref_df = main_df.copy()
         logging.info("No differences between ref_df and main_df")
+
+    print(ref_df)
 
     # print(ref_df)
     # print(main_df)

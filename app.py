@@ -1331,7 +1331,7 @@ def generate_progress_bar(entry):
         # label = (
         #     f'{data_panoptes_custom_status[entry["name"]]["real_status"]} - {progress}'
         # )
-    elif status in ["Partial report"]:
+    elif status in ["Too low nb of cells", "mm10 sample", "Non canonical plate"]:
         # elif progress == 100 and status in ["Missing report"]:
         # elif progress < 100 and status == "Error":
         color = "orange"
@@ -1746,7 +1746,7 @@ def update_progress(url, progress_store):
             # "jobs_total": 0,
             # "jobs_done": 0,
             # "status": "To process",
-            "status": row["real_status"],
+            "status": row["status"],
         }
     # if progress_store == data_panoptes:
     #     print("NO UPDATE")
@@ -2246,12 +2246,14 @@ def trigger_snakemake(
 
             snake_args = {
                 "email": email,
-                "multistep_normalisation_for_SV_calling": True
-                if sv_calling == "multistep_normalisation_for_SV_calling"
-                else False,
-                "hgsvc_based_normalized_counts": True
-                if sv_calling == "hgsvc_based_normalized_counts"
-                else False,
+                "multistep_normalisation_for_SV_calling": (
+                    True
+                    if sv_calling == "multistep_normalisation_for_SV_calling"
+                    else False
+                ),
+                "hgsvc_based_normalized_counts": (
+                    True if sv_calling == "hgsvc_based_normalized_counts" else False
+                ),
                 "blacklisting": blacklisting,
             }
             snake_args["multistep_normalisation"] = True
@@ -2517,7 +2519,7 @@ def generate_form_element(selected_run, selected_sample):
                                                 "index": f"{selected_run}--{selected_sample}",
                                             },
                                             placeholder="Please enter path for ArbiGent BED file",
-                                            disabled=False
+                                            disabled=False,
                                             # color="blue",
                                         ),
                                         dbc.FormText(
