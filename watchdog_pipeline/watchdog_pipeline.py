@@ -1,6 +1,7 @@
+import collections
 import time
 import os, sys, glob, subprocess, re
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import json
 import pandas as pd
@@ -30,8 +31,8 @@ logging.basicConfig(
 # main_path_to_watch = sys.argv[1]
 
 paths_to_watch = [
-    # "/g/korbel/shared/data/others/StrandSeq/runs",
-    # "/g/korbel/shared/genecore",
+    "/g/korbel/shared/data/others/StrandSeq/runs",
+    "/g/korbel/shared/genecore",
     "/g/korbel/STOCKS/Data/Assay/sequencing",
 ]
 
@@ -235,15 +236,17 @@ def update_timestamps(directory):
 
     :param directory: Path to the directory
     """
+    logging.info(f"Updated timestamp for: {directory}")
+
     for root, dirs, files in os.walk(directory):
         for file in files:
+            file_path = Path(root) / file
+
             if file.endswith(".fastq.gz"):
                 continue
             try:
-                file_path = Path(root) / file
                 current_time = time.time()
                 os.utime(file_path, (current_time, current_time))
-                logging.info(f"Updated timestamp for: {file_path}")
             except FileNotFoundError:
                 logging.info(f"File not found: {file_path}")
 
@@ -251,6 +254,25 @@ def update_timestamps(directory):
 def load_config(file_path):
     with open(file_path, "r") as file:
         return yaml.safe_load(file)
+
+
+def compute_timestamps_for_all_files(folder):
+    logging.info(f"Computing timestamps for all files in the folder: {folder}")
+    # compute the timestamp for every file of the folder and return the oldest one
+    timestamps_dict = dict()
+    for root, dirs, files in os.walk(folder):
+        for file in files:
+            # discard symbolic link
+            file_path = Path(root) / file
+            if os.path.islink(file_path):
+                continue
+            ts = os.path.getmtime(file_path)
+            timestamps_dict[file_path] = ts
+            # print timestamps human readble
+    timestamps = [v for k, v in timestamps_dict.items()]
+    # compute time difference between the oldest file and now
+
+    return min(timestamps)
 
 
 # Function to process each sample
@@ -275,6 +297,8 @@ def process_sample(
         f"mc_report": False,
         "mm10": False,
     }
+
+    logging.info(f"Processing {sample_name} from {plate}")
 
     if sample_name in config["tagged_samples"]["mm10"]:
         dict_variables["mm10"] = True
@@ -395,6 +419,7 @@ def process_directories(
 ):
     unwanted = ["._.DS_Store", ".DS_Store", "config"]
 
+    # Filter the plates that were not processed yet
     if ref_df.empty is False:
         ref_df_plates = (
             ref_df.loc[ref_df["status"] != "To process"]["run_path"].unique().tolist()
@@ -404,6 +429,8 @@ def process_directories(
 
     main_df = []
     total_list_runs = []
+
+    total_list_runs_dict = collections.defaultdict(list)
 
     # if len(workflows_data) > 0:
     for path_to_watch in paths_to_watch:
@@ -419,20 +446,38 @@ def process_directories(
                         folder_path = os.path.join(year_path, folder)
                         if os.path.isdir(folder_path) and folder not in unwanted:
                             total_list_runs.append(folder_path)
+                            total_list_runs_dict[folder_path] = path_to_watch
         else:
             for e in os.listdir(path_to_watch):
                 if e not in unwanted and os.path.isdir(os.path.join(path_to_watch, e)):
                     total_list_runs.append(os.path.join(path_to_watch, e))
+                    total_list_runs_dict[os.path.join(path_to_watch, e)] = path_to_watch
 
     # exclude plates from the ref_df in the total_list_runs
     # print(total_list_runs)
     # print("EXCLUDE")
     # print(ref_df_plates)
 
+    # Compare the list of plates in the total_list_runs with the ref_df_plates and exclude the ones that are already processed
     total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
+    total_list_runs_dict = {
+        k: v for k, v in total_list_runs_dict.items() if k in total_list_runs
+    }
+
+    for directory_path in sorted(list(set(total_list_runs).union(set(ref_df_plates)))):
+        scratch_path = f"{data_location}/{os.path.basename(directory_path)}"
+        if os.path.isdir(scratch_path):
+            logging.info(f"Directory path: {scratch_path}")
+            oldest_timestamp = compute_timestamps_for_all_files(f"{scratch_path}")
+            age_time = datetime.now() - datetime.fromtimestamp(oldest_timestamp)
+            logging.info(f"Age of the oldest file of {scratch_path}: {age_time}")
+            # if the oldest file is older than 5 months, update the timestamps
+            if age_time > timedelta(days=150):
+                update_timestamps(scratch_path)
+
     # print(total_list_runs)
 
-    for directory_path in total_list_runs:
+    for directory_path, path_to_watch in total_list_runs_dict.items():
         # print(directory_path)
         prefixes, samples, plate_types, folder_hash = extract_samples_names(
             glob.glob(f"{directory_path}/*.txt.gz"),
@@ -460,14 +505,17 @@ def process_directories(
                     config,
                 )
                 main_df.append(result)
+    # return only the samples that are not in the excluded list
     return pd.DataFrame(main_df)
 
 
 def check_unprocessed_folder():
     ref_df_path = "watchdog/processing_status.tsv"
 
+    # Loading the reference dataframe of the last iteration if it exists
     if os.path.isfile(ref_df_path):
         ref_df = pd.read_csv(ref_df_path, sep="\t")
+        # Ref_df is the master dataframe that contains all the information about the samples
         logging.info("Ref df")
         # get timestamp
         ref_df_ts = os.path.getmtime(ref_df_path)
@@ -479,13 +527,13 @@ def check_unprocessed_folder():
         ref_df = pd.DataFrame()
         print("No ref df")
 
-    # print(ref_df.empty)
     # Get the list of excluded samples from the config
     config = load_config("watchdog_pipeline/excluded_samples.yaml")
     # TODO: add run in the excluded list
 
     variable = "aqc" if pipeline == "ashleys-qc-pipeline" else "mc"
 
+    # main_df is the dataframe that will be used to process the new samples
     main_df = process_directories(
         paths_to_watch,
         config,
@@ -502,63 +550,171 @@ def check_unprocessed_folder():
     print(main_df)
     mosaitrigger = False
 
-    if ref_df.empty is False:
+    if not main_df.empty and not ref_df.empty:
 
-        if main_df.empty is False:
-            # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
+        # check if plates are not in the ref_df
 
-            main_df_to_process = (
-                main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
-                .drop_duplicates()
-                .set_index("plate")
-                .to_dict("index")
+        new_plates = set(
+            main_df.loc[main_df["status"] == "To process", "plate"].unique()
+        ).difference(set(ref_df["plate"].unique()))
+        # if not in the ref_df, add them and stop there to wait for the next iteration in order to compare the hash
+        if new_plates:
+            logging.info("New plates")
+            print(new_plates)
+            ref_df = (
+                pd.concat([ref_df, main_df], axis=0)
+                .sort_values(["plate", "sample"], ascending=True)
+                .reset_index(drop=True)
             )
 
-            logging.info("main_df_to_process")
-            print(main_df_to_process)
+        # if already there, compare the hash
+        else:
+            # get the list of plates that are in both dataframes
+            common_plates = set(main_df["plate"].unique()).intersection(
+                set(ref_df["plate"].unique())
+            )
+
+            # get the list of plates that are in both dataframes
             ref_df_to_process = (
                 ref_df.loc[
-                    ref_df["plate"].isin(list(main_df_to_process.keys())),
-                    ["plate", "folder_hash"],
+                    ref_df["plate"].isin(common_plates), ["plate", "folder_hash"]
                 ]
                 .drop_duplicates()
                 .set_index("plate")
                 .to_dict("index")
             )
-            logging.info("ref_df_to_process")
-            print(ref_df_to_process)
-            if ref_df_to_process:
-                logging.info("if ref_df_to_process")
 
-                for run, folder_hash in main_df_to_process.items():
-                    if run in ref_df_to_process:
-                        logging.info(
-                            run,
-                            folder_hash["folder_hash"],
-                            ref_df_to_process[run]["folder_hash"],
-                        )
-                        if (
-                            folder_hash["folder_hash"]
-                            != ref_df_to_process[run]["folder_hash"]
-                        ):
-                            main_df.loc[main_df["plate"] == run, "status"] = (
-                                "Copy not complete"
-                            )
-                        else:
-                            mosaitrigger = True
-                            logging.info("Same hash, good to go!")
+            for plate, folder_hash in ref_df_to_process.items():
+                if (
+                    plate in ref_df_to_process
+                    and folder_hash["folder_hash"]
+                    != ref_df_to_process[plate]["folder_hash"]
+                ):
+                    main_df.loc[main_df["plate"] == plate, "status"] = (
+                        "Copy not complete"
+                    )
+                else:
+                    mosaitrigger = True
+                    logging.info(f"Same hash for {plate}, good to go!")
+            # regardless of mosaitrigger update ref_df to get the latest hash value, replace corresponding rows, without adding new ones
+            ref_df = pd.concat(
+                [
+                    ref_df.loc[~ref_df["plate"].isin(common_plates)],
+                    main_df.loc[main_df["plate"].isin(common_plates)],
+                ]
+            ).sort_values(["plate", "sample"], ascending=True)
+        ref_df = ref_df.reset_index(drop=True)
+        logging.info("Updated reference dataframe with new entries.")
+        print(ref_df)
+        ref_df.to_csv(ref_df_path, sep="\t", index=False)
 
-            else:
+    # # if both dataframes are not empty, there are new samples to process
+    # if not ref_df.empty and not main_df.empty:
+    #     #
+    #     main_df_to_process = (
+    #         main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
+    #         .drop_duplicates()
+    #         .set_index("plate")
+    #         .to_dict("index")
+    #     )
+    #     ref_df_to_process = (
+    #         ref_df.loc[
+    #             ref_df["plate"].isin(main_df_to_process.keys()),
+    #             ["plate", "folder_hash"],
+    #         ]
+    #         .drop_duplicates()
+    #         .set_index("plate")
+    #         .to_dict("index")
+    #     )
 
-                concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
-                concat_df.to_csv(ref_df_path, sep="\t", index=False)
+    #     for plate, folder_hash in main_df_to_process.items():
+    #         if (
+    #             plate in ref_df_to_process
+    #             and folder_hash["folder_hash"]
+    #             != ref_df_to_process[plate]["folder_hash"]
+    #         ):
+    #             main_df.loc[main_df["plate"] == plate, "status"] = "Copy not complete"
+    #         else:
+    #             mosaitrigger = True
+    #             logging.info(f"Same hash for {plate}, good to go!")
 
-    else:
-        main_df.to_csv(ref_df_path, sep="\t", index=False)
-        ref_df = main_df.copy()
-        logging.info("No differences between ref_df and main_df")
+    #     if mosaitrigger:
+    #         concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
+    #         concat_df.to_csv(ref_df_path, sep="\t", index=False)
+    #         logging.info("Updated reference dataframe with new entries.")
+    # elif main_df.empty:
+    #     logging.info("No new samples to process.")
+    # else:
+    #     main_df.to_csv(ref_df_path, sep="\t", index=False)
+    #     logging.info("Reference dataframe updated with main DataFrame.")
 
-    print(ref_df)
+    # if ref_df.empty is False:
+    #     if main_df.empty is True:
+    #         logging.info("No new samples to process")
+
+    #     elif main_df.empty is False:
+    #         # Compare hash for each plate and sample that has status "To process" between the ref_df and the main_df
+
+    #         main_df_to_process = (
+    #             main_df.loc[main_df["status"] == "To process", ["plate", "folder_hash"]]
+    #             .drop_duplicates()
+    #             .set_index("plate")
+    #             .to_dict("index")
+    #         )
+
+    #         logging.info("main_df_to_process")
+    #         print(main_df_to_process)
+    #         ref_df_to_process = (
+    #             ref_df.loc[
+    #                 ref_df["plate"].isin(list(main_df_to_process.keys())),
+    #                 ["plate", "folder_hash"],
+    #             ]
+    #             .drop_duplicates()
+    #             .set_index("plate")
+    #             .to_dict("index")
+    #         )
+    #         logging.info("ref_df_to_process")
+    #         print(ref_df_to_process)
+    #         if ref_df_to_process:
+    #             logging.info("if ref_df_to_process")
+
+    #             for run, folder_hash in main_df_to_process.items():
+    #                 if run in ref_df_to_process:
+    #                     logging.info(
+    #                         f'{run}, {folder_hash["folder_hash"]}, {ref_df_to_process[run]["folder_hash"]}'
+    #                     )
+    #                     if (
+    #                         folder_hash["folder_hash"]
+    #                         != ref_df_to_process[run]["folder_hash"]
+    #                     ):
+    #                         main_df.loc[main_df["plate"] == run, "status"] = (
+    #                             "Copy not complete"
+    #                         )
+    #                     else:
+    #                         mosaitrigger = True
+    #                         logging.info("Same hash, good to go!")
+
+    #         else:
+
+    #             concat_df = pd.concat([ref_df, main_df], axis=0).reset_index(drop=True)
+    #             concat_df.to_csv(ref_df_path, sep="\t", index=False)
+
+    # else:
+    #     # main_df.to_csv(ref_df_path, sep="\t", index=False)
+    #     ref_df = main_df.copy()
+    #     logging.info("No differences between ref_df and main_df")
+
+    # logging.info("Updating /scratch files timestamps that are close to 6 months")
+
+    # dict_old_entries = ref_df.loc[
+    #     (ref_df["final_output_scratch"] == True) & (ref_df["scratch_rdays"] < 30)
+    # ].to_dict("records")
+    # if dict_old_entries:
+    #     for row in dict_old_entries:
+    #         logging.info(row)
+    #         update_timestamps(f"{data_location}/{row['plate']}/{row['sample']}")
+    # else:
+    #     logging.info("No old entries")
 
     # print(ref_df)
     # print(main_df)
@@ -722,7 +878,7 @@ def check_unprocessed_folder():
                     #     ]
                     #     command = f'sqlite3 /g/korbel2/weber/workspace/strandscape/.panoptes.db "DELETE FROM workflows WHERE id={workflow_id};"'
                     #     subprocess.run(command, shell=True, check=True)
-
+                    panoptes = False
                     process_new_directory(
                         row["run_path"],
                         # "/".join([path_to_watch, row["plate"]]),
@@ -831,14 +987,6 @@ def check_unprocessed_folder():
 
             # else:
             #     logging.info("Panoptes data not found for workflow entry: %s", row)
-
-        logging.info("Updating /scratch files timestamps that are close to 6 months")
-
-        for row in main_df.loc[
-            (main_df["final_output_scratch"] == True) & (main_df["scratch_rdays"] < 10)
-        ].to_dict("records"):
-            logging.info(row)
-            update_timestamps(f"{data_location}/{row['plate']}/{row['sample']}")
 
 
 def process_new_directory(

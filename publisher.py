@@ -354,9 +354,12 @@ def process_directories(
     unwanted = ["._.DS_Store", ".DS_Store", "config"]
 
     if ref_df.empty is False:
-        ref_df_plates = (
-            ref_df.loc[ref_df["status"] != "To process"]["run_path"].unique().tolist()
-        )
+        ref_df = ref_df.loc[
+            ~ref_df["status"].isin(
+                ["To process", "Copy not complete", "AQC Report missing"]
+            )
+        ]
+        ref_df_plates = ref_df["run_path"].unique().tolist()
     else:
         ref_df_plates = []
 
@@ -388,7 +391,7 @@ def process_directories(
     # print(ref_df_plates)
 
     total_list_runs = sorted(list(set(total_list_runs).difference(set(ref_df_plates))))
-    # print(total_list_runs)
+    print(total_list_runs)
 
     for directory_path in total_list_runs:
         # print(directory_path)
@@ -496,21 +499,30 @@ def check_unprocessed_folder():
 
                 for run, folder_hash in main_df_to_process.items():
                     if run in ref_df_to_process:
-                        logging.info(
+                        print(
                             run,
                             folder_hash["folder_hash"],
                             ref_df_to_process[run]["folder_hash"],
                         )
-                        if (
-                            folder_hash["folder_hash"]
-                            != ref_df_to_process[run]["folder_hash"]
+                        if str(folder_hash["folder_hash"]) != str(
+                            ref_df_to_process[run]["folder_hash"]
                         ):
+                            logging.info("Different hash")
                             main_df.loc[main_df["plate"] == run, "status"] = (
                                 "Copy not complete"
                             )
+
                         else:
                             mosaitrigger = True
                             logging.info("Same hash, good to go!")
+                            main_df.loc[main_df["plate"] == run, "status"] = (
+                                "To process"
+                            )
+
+                        ref_df = ref_df.loc[ref_df["plate"] != run]
+                        ref_df = pd.concat([ref_df, main_df], axis=0).reset_index(
+                            drop=True
+                        )
 
             else:
 
@@ -562,11 +574,11 @@ def get_files_structure(root_folder):
         pattern = "(?:20[1-3][0-9])-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])-.*"
         # Find all matches
         matches = re.findall(pattern, run_name)
-        print(run_name, matches)
+        # print(run_name, matches)
         if matches:
-            print("OK")
+            # print("OK")
             for sample_folder in os.listdir(os.path.join(root_folder, run_name_folder)):
-                print(sample_folder)
+                # print(sample_folder)
                 if sample_folder not in unwanted:
                     sample_name = sample_folder
                     data_dict[run_name].append(sample_name)
@@ -618,7 +630,7 @@ if __name__ == "__main__":
     while True:
         # Wf progress status - Panoptes
         data = check_unprocessed_folder()
-        print(data)
+        # print(data)
         # data = fetch_data_from_api()
         if data != {}:
             print(config["panoptes"]["json_status_backup"])
